@@ -40,7 +40,13 @@ In the assistant's advanced / call settings:
   job is captured (prevents the line-open token bleed you hit before).
 - **Caller hangup:** handled automatically by Vapi — when the caller hangs up,
   the session ends. No action needed.
-- **Recording:** ENABLE (on by default). Needed for the dashboard playback.
+- **Recording:** ENABLE (on by default). Vapi records the call (Twilio is only
+  the carrier) and returns the URL in the end-of-call-report under
+  `message.artifact.recording`, which the webhook saves to `calls.recording_url`.
+  For Phase 1 this lives on Vapi's storage — fine for testing.
+  **Phase 6 (hardening):** point Vapi at your own **Supabase Storage** bucket
+  (Vapi also supports S3 / GCS / Cloudflare R2) so you *own* the recordings and
+  control retention, instead of depending on Vapi-hosted URLs.
 
 ## 6. System Prompt  (paste this)
 

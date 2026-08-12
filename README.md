@@ -17,7 +17,8 @@ dispatches an SMS / custom JSON.
 - [ ] **Phase 3** — Dispatch (Twilio SMS + custom JSON)
 - [ ] **Phase 4** — Dashboard (login, live calls, recordings)
 - [ ] **Phase 5** — Settings UI (voice, prompt, KB, dispatch, credentials)
-- [ ] **Phase 6** — Hardening (anti-abuse, KB filter, spend caps, consent line)
+- [ ] **Phase 6** — Hardening (anti-abuse, KB filter, spend caps, consent line,
+  move call recordings from Vapi storage to your own Supabase Storage bucket)
 
 ---
 
