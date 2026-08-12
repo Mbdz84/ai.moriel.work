@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import LogoutButton from "@/components/LogoutButton";
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServer();
@@ -22,16 +21,8 @@ export default async function DashboardPage() {
     | undefined;
 
   return (
-    <main className="min-h-screen p-8 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-4 text-sm">
-          <Link href="/settings" className="underline">
-            Settings
-          </Link>
-          <LogoutButton />
-        </div>
-      </div>
+    <main className="mx-auto max-w-5xl p-8 space-y-4">
+      <h1 className="text-2xl font-bold">Dashboard</h1>
 
       {business ? (
         <p className="text-neutral-600">
