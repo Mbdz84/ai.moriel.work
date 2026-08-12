@@ -42,9 +42,27 @@ export async function POST(req: NextRequest) {
   }
 
   // --- Extract the structured data the assistant collected. ---
-  // If you configure a Vapi "structured output" / analysis schema,
-  // it arrives here. Otherwise parse message.analysis.structuredData.
-  const data = message?.analysis?.structuredData ?? {};
+  // Vapi (2026 Structured Outputs) delivers results keyed by the output's UUID
+  // at message.artifact.structuredOutputs[<id>].result. We attached ONE output
+  // ("Locksmith Job"), so grab the first result. Falls back to the legacy
+  // message.analysis.structuredData path for older assistants.
+  type JobData = {
+    name?: string;
+    phone?: string;
+    address?: string;
+    property_type?: string;
+    service_type?: string;
+    urgency?: string;
+    qualified?: boolean;
+    notes?: string;
+  };
+  const artifact = message?.artifact ?? {};
+  const structuredOutputs = artifact?.structuredOutputs ?? {};
+  const firstOutput = Object.values(structuredOutputs)[0] as
+    | { result?: JobData }
+    | undefined;
+  const data: JobData =
+    firstOutput?.result ?? message?.analysis?.structuredData ?? {};
   const endedReason = message?.endedReason ?? call?.endedReason ?? null;
 
   // 2) Store the call.
@@ -62,8 +80,14 @@ export async function POST(req: NextRequest) {
         : null,
       status: "completed",
       ended_reason: endedReason,
-      recording_url: message?.recordingUrl ?? message?.stereoRecordingUrl ?? null,
-      transcript: message?.transcript ?? null,
+      // Recording + transcript live under message.artifact in end-of-call-report.
+      recording_url:
+        artifact?.recording?.url ??
+        artifact?.recording?.combinedUrl ??
+        artifact?.recording?.stereoUrl ??
+        artifact?.recordingUrl ??
+        null,
+      transcript: artifact?.transcript ?? message?.transcript ?? null,
     })
     .select("id")
     .single();
