@@ -1,0 +1,32 @@
+// Send SMS via Twilio's REST API using fetch (no SDK dependency).
+// Credentials come from env for now; Phase 5 moves them to the
+// per-business `credentials` table.
+
+export async function sendSms(to: string, body: string) {
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_FROM_NUMBER;
+
+  if (!sid || !token || !from) {
+    throw new Error("Twilio env vars missing (SID / AUTH_TOKEN / FROM_NUMBER)");
+  }
+
+  const auth = Buffer.from(`${sid}:${token}`).toString("base64");
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({ From: from, To: to, Body: body }),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Twilio SMS failed (${res.status}): ${text}`);
+  }
+  return res.json();
+}

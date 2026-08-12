@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { dispatchJob } from "@/lib/dispatch";
 
 // ============================================================
 // Vapi end-of-call webhook.
@@ -116,10 +117,11 @@ export async function POST(req: NextRequest) {
     .select("id")
     .single();
 
-  // 4) Dispatch (SMS via Twilio + custom JSON). Fire-and-log.
-  //    TODO Phase 3: implement sendSms() and postJson() with retry.
-  //    Left as stubs so the pipeline is visible end-to-end.
-  // await dispatch(businessId, jobRow, supabase);
+  // 4) Dispatch: SMS via Twilio + optional custom JSON push.
+  //    Failures are logged inside dispatchJob and don't fail the webhook.
+  if (jobRow?.id) {
+    await dispatchJob(supabase, businessId, jobRow.id, data);
+  }
 
   return NextResponse.json({ ok: true, call_id: callRow.id, job_id: jobRow?.id });
 }
