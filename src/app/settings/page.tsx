@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import SettingsNav from "@/components/SettingsNav";
 import { saveSettings } from "./actions";
 
 export default async function SettingsPage({
@@ -47,9 +47,7 @@ export default async function SettingsPage({
     <main className="min-h-screen p-8 max-w-xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <Link href="/dashboard" className="text-sm underline">
-          Dashboard
-        </Link>
+        <SettingsNav active="dispatch" />
       </div>
 
       {business && (
