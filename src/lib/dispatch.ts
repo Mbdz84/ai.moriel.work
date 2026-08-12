@@ -21,6 +21,12 @@ type DispatchTarget = {
   json_headers: Record<string, string> | null;
 };
 
+type Credentials = {
+  twilio_account_sid: string | null;
+  twilio_auth_token: string | null;
+  twilio_number: string | null;
+};
+
 function formatJobMessage(data: JobData): string {
   const lines = [
     "New locksmith job",
@@ -52,6 +58,12 @@ export async function dispatchJob(
     .eq("business_id", businessId)
     .maybeSingle()) as { data: DispatchTarget | null };
 
+  const { data: cred } = (await supabase
+    .from("credentials")
+    .select("*")
+    .eq("business_id", businessId)
+    .maybeSingle()) as { data: Credentials | null };
+
   const body = formatJobMessage(data);
 
   // ---- SMS ----
@@ -59,7 +71,11 @@ export async function dispatchJob(
   const smsEnabled = target ? target.sms_enabled !== false : true;
   if (smsEnabled && smsTo) {
     try {
-      await sendSms(smsTo, body);
+      await sendSms(smsTo, body, {
+        sid: cred?.twilio_account_sid,
+        token: cred?.twilio_auth_token,
+        from: cred?.twilio_number,
+      });
       await supabase.from("jobs").update({ dispatched_sms: true }).eq("id", jobId);
     } catch (e) {
       console.error("SMS dispatch failed:", e);

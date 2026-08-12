@@ -2,13 +2,20 @@
 // Credentials come from env for now; Phase 5 moves them to the
 // per-business `credentials` table.
 
-export async function sendSms(to: string, body: string) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_FROM_NUMBER;
+export type TwilioCreds = {
+  sid?: string | null;
+  token?: string | null;
+  from?: string | null;
+};
+
+// Per-tenant credentials (from the DB) take priority; env is the fallback.
+export async function sendSms(to: string, body: string, creds?: TwilioCreds) {
+  const sid = creds?.sid || process.env.TWILIO_ACCOUNT_SID;
+  const token = creds?.token || process.env.TWILIO_AUTH_TOKEN;
+  const from = creds?.from || process.env.TWILIO_FROM_NUMBER;
 
   if (!sid || !token || !from) {
-    throw new Error("Twilio env vars missing (SID / AUTH_TOKEN / FROM_NUMBER)");
+    throw new Error("Twilio credentials missing (SID / AUTH_TOKEN / FROM_NUMBER)");
   }
 
   const auth = Buffer.from(`${sid}:${token}`).toString("base64");
