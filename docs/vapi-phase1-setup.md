@@ -110,12 +110,29 @@ Then end the call.
 > you create once and attach to the assistant.
 
 **a) Create the structured output**
+
+> FASTEST — one command instead of clicking each field. The dashboard builder is
+> field-by-field, so use the helper script to create all 8 fields and attach it
+> to the assistant in one shot:
+>
+> ```bash
+> cd ~/Downloads/Projects/ai.moriel.work
+> # ASSISTANT_ID is in the dashboard URL: dashboard.vapi.ai/assistants/<ID>
+> ./scripts/create-structured-output.sh <ASSISTANT_ID>
+> ```
+> It reads `VAPI_API_KEY` from `.env.local`. On success you get JSON with an
+> `"id"`, and "Locksmith Job" shows up attached to the assistant. Skip the manual
+> steps below if you use this.
+
+**— OR — create it manually in the dashboard:**
 Vapi dashboard → **Structured Outputs** (left sidebar) → **Create New Structured
 Output**:
+- Extraction method: **AI extraction**
 - Name: `Locksmith Job`
-- Type: **Object**
 - Description: "Extract locksmith job details from the call"
-- Paste this JSON schema:
+- Result Format: **Multiple fields (Object)**, then **+ Add Property** for each
+  field below (use the **Enum Values** toggle for property_type / service_type /
+  urgency). This is the exact same schema the script sends:
 
 ```json
 {
@@ -146,15 +163,32 @@ UUID. Our webhook reads the first structured output's `result` automatically, so
 you don't need to hardcode the UUID.
 
 ## 8. Connect the webhook (Server URL)
-Assistant → **Messaging / Server** settings:
-- **Server URL:** `https://ai.moriel.work/api/vapi/webhook`
-  (for local testing before the domain is live, use an ngrok URL — ask me and
-  I'll walk you through it)
-- **Secret / header:** add header `x-vapi-secret` = the value of
-  `VAPI_WEBHOOK_SECRET` from your `.env.local`. Our webhook rejects anything
-  without it.
-- Under **Server Messages**, make sure **end-of-call-report** is enabled (that's
-  the event that carries the recording, transcript, and structured outputs).
+> UPDATED labels — the server URL now lives under the assistant's **Advanced**
+> tab in a **Webhook Server** section (not a "Messaging/Server" area), and you
+> **Publish** instead of Save.
+
+Assistant → open your `Locksmith Receptionist` → **Advanced** tab → **Webhook
+Server**:
+
+1. **Server URL:** `https://ai.moriel.work/api/vapi/webhook`
+   (for local testing before the domain is live, use an ngrok URL — ask me and
+   I'll walk you through it)
+2. **Timeout:** leave the default (~20s).
+3. **Authorization:** keep **No authentication** selected — we authenticate with
+   a header instead (simpler than creating a Custom Credential).
+4. **HTTP Headers → Add Header:** add
+   - Name: `x-vapi-secret`
+   - Value: the `VAPI_WEBHOOK_SECRET` from your `.env.local`
+
+   Our webhook rejects any request without this header.
+5. **Server Messages:** make sure **end-of-call-report** is enabled (Advanced /
+   Messaging area) — that's the event carrying the recording, transcript, and
+   structured outputs.
+6. **Publish** the assistant (the unsaved-changes banner has a Publish button).
+
+> Alternative (more secure, optional): instead of the header, create a **Custom
+> Credential** under Server Authentication and select it in **Authorization**.
+> For Phase 1 the header is fine.
 
 > Payload note: in `end-of-call-report`, the recording and transcript live under
 > `message.artifact` (`message.artifact.recording`, `message.artifact.transcript`),
