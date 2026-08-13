@@ -19,6 +19,11 @@
   }
 }
 
+/* Larger base text across the whole app (scales rem-based sizes). */
+html {
+  font-size: 112.5%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

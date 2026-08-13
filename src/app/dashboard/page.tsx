@@ -2,10 +2,17 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { getActiveBusiness } from "@/lib/tenant";
+import { computeRange } from "@/lib/date-range";
 import AutoRefresh from "@/components/AutoRefresh";
+import RangePicker from "@/components/RangePicker";
 import CallsView, { type Call } from "@/components/CallsView";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; from?: string; to?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createSupabaseServer();
   const {
     data: { user },
@@ -19,7 +26,7 @@ export default async function DashboardPage() {
 
   if (!businessId) {
     return (
-      <main className="mx-auto max-w-6xl p-8">
+      <main className="mx-auto w-full max-w-[1100px] p-8">
         <p className="text-amber-600">
           No company linked to your account.{" "}
           <Link href="/setup" className="underline">
@@ -31,28 +38,38 @@ export default async function DashboardPage() {
     );
   }
 
+  const range =
+    sp.from && sp.to
+      ? { start: new Date(sp.from), end: new Date(sp.to) }
+      : computeRange(sp.range ?? "this_month");
+
   const { data: calls } = await supabase
     .from("calls")
     .select(
       "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, jobs(*)"
     )
     .eq("business_id", businessId)
+    .gte("created_at", range.start.toISOString())
+    .lte("created_at", range.end.toISOString())
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(200);
 
   const rows = (calls ?? []) as Call[];
 
   return (
-    <main className="mx-auto max-w-6xl p-8 space-y-6">
+    <main className="mx-auto w-full max-w-[1100px] p-8 space-y-6">
       <AutoRefresh seconds={15} />
 
-      <div>
-        <h1 className="text-2xl font-bold">Calls</h1>
-        {business && (
-          <p className="text-sm text-neutral-500">
-            {business.name} · {rows.length} recent
-          </p>
-        )}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Calls</h1>
+          {business && (
+            <p className="text-sm text-neutral-500">
+              {business.name} · {rows.length} in range
+            </p>
+          )}
+        </div>
+        <RangePicker />
       </div>
 
       <CallsView calls={rows} businessName={business?.name ?? ""} />

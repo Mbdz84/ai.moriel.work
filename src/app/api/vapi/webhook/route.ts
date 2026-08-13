@@ -84,11 +84,14 @@ export async function POST(req: NextRequest) {
       // Vapi reports the call cost (USD) in the end-of-call-report.
       cost: message?.cost ?? call?.cost ?? null,
       // Recording + transcript live under message.artifact in end-of-call-report.
+      // Stored as a "has recording" marker + fallback; playback re-fetches a
+      // fresh URL from Vapi via /api/recording/[id] (URLs can expire).
       recording_url:
-        artifact?.recording?.url ??
-        artifact?.recording?.combinedUrl ??
-        artifact?.recording?.stereoUrl ??
         artifact?.recordingUrl ??
+        artifact?.stereoRecordingUrl ??
+        artifact?.recording?.stereoUrl ??
+        artifact?.recording?.mono?.combinedUrl ??
+        artifact?.recording?.url ??
         null,
       transcript: artifact?.transcript ?? message?.transcript ?? null,
     })

@@ -42,7 +42,7 @@ export default async function SettingsPage({
   const label = "text-sm font-medium text-neutral-700";
 
   return (
-    <main className="min-h-screen p-8 max-w-xl mx-auto space-y-6">
+    <main className="mx-auto w-full max-w-[1100px] p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
         <SettingsNav active="dispatch" admin={true} />

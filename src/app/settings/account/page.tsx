@@ -17,7 +17,7 @@ export default async function AccountSettingsPage() {
   const admin = isAdmin(active?.role);
 
   return (
-    <main className="mx-auto max-w-2xl p-8 space-y-6">
+    <main className="mx-auto w-full max-w-[1100px] p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Account</h1>
         <SettingsNav active="account" admin={admin} />

@@ -16,7 +16,7 @@ export default async function TopBar() {
 
   return (
     <header className="border-b border-neutral-200 bg-white">
-      <nav className="mx-auto max-w-6xl flex items-center justify-between px-6 h-14">
+      <nav className="mx-auto max-w-[1100px] flex items-center justify-between px-6 h-14">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="font-bold">
             Voice-AI

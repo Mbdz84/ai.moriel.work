@@ -128,11 +128,15 @@ function CallCard({
             <Field label="Phone" value={j?.phone || call.from_number} />
             <Field label="Service" value={titleize(j?.service_type)} />
             <Field label="Property" value={titleize(j?.property_type)} />
-            <Field label="Duration" value={fmtDuration(call.duration_sec)} />
-            <Field
-              label="Cost"
-              value={call.cost != null ? `$${call.cost.toFixed(2)}` : null}
-            />
+            <div>
+              <Field label="Duration" value={fmtDuration(call.duration_sec)} />
+              <div className="mt-2">
+                <Field
+                  label="Cost"
+                  value={call.cost != null ? `$${call.cost.toFixed(2)}` : null}
+                />
+              </div>
+            </div>
             <div className="col-span-2">
               <Field label="Address" value={j?.address} />
             </div>
@@ -153,7 +157,7 @@ function CallCard({
 
           {call.recording_url && (
             <audio controls preload="none" className="w-full">
-              <source src={call.recording_url} />
+              <source src={`/api/recording/${call.id}`} />
             </audio>
           )}
 
