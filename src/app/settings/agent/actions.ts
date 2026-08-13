@@ -20,41 +20,31 @@ export async function saveAgent(formData: FormData) {
   if (!businessId) redirect("/dashboard");
 
   const str = (k: string) => String(formData.get(k) ?? "").trim();
-  const num = (k: string) => {
-    const v = parseInt(str(k), 10);
-    return Number.isFinite(v) ? v : null;
-  };
 
   const assistantId = str("vapi_assistant_id");
-
-  const agentValues = {
-    vapi_assistant_id: assistantId || null,
-    display_name: str("display_name") || "Receptionist",
-    greeting: str("greeting"),
-    system_prompt: str("system_prompt"),
-    voice_provider: str("voice_provider") || "11labs",
-    voice_id: str("voice_id"),
-    language: str("language") || "en",
-    silence_timeout_sec: num("silence_timeout_sec"),
-    max_duration_sec: num("max_duration_sec"),
-    updated_at: new Date().toISOString(),
+  const script = {
+    firstMessage: str("greeting"),
+    systemPrompt: str("system_prompt"),
+    knowledgeBase: str("knowledge_base"),
   };
 
-  await supabase.from("agents").update(agentValues).eq("business_id", businessId);
+  // Cache in our DB so edits aren't lost if the Vapi sync fails.
+  await supabase
+    .from("agents")
+    .update({
+      vapi_assistant_id: assistantId || null,
+      greeting: script.firstMessage,
+      system_prompt: script.systemPrompt,
+      knowledge_base: script.knowledgeBase,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("business_id", businessId);
 
-  const kb = {
-    kb_we_do: str("kb_we_do"),
-    kb_we_dont: str("kb_we_dont"),
-    service_area: str("service_area"),
-    pricing_notes: str("pricing_notes"),
-  };
-  await supabase.from("businesses").update(kb).eq("id", businessId);
-
-  // Sync to Vapi if we have an assistant ID + API key.
+  // Push to the live Vapi assistant (source of truth).
   let sync = "skipped";
   if (assistantId && process.env.VAPI_API_KEY) {
     try {
-      await updateVapiAssistant(assistantId, agentValues, kb);
+      await updateVapiAssistant(assistantId, script);
       sync = "ok";
     } catch (e) {
       console.error("Vapi sync failed:", e);

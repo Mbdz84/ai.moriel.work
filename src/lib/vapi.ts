@@ -1,42 +1,68 @@
-// Push agent settings from our DB to the Vapi assistant via the Vapi API.
+// Thin editor over the Vapi assistant. Vapi is the source of truth;
+// we pull the live config, let the user edit script + knowledge base,
+// and push it back.
 
-export type AgentCfg = {
-  greeting?: string | null;
-  system_prompt?: string | null;
-  voice_id?: string | null;
-  voice_provider?: string | null;
-  silence_timeout_sec?: number | null;
-  max_duration_sec?: number | null;
-};
+const KB_HEADER = "# KNOWLEDGE BASE";
 
-export type BusinessKb = {
-  kb_we_do?: string | null;
-  kb_we_dont?: string | null;
-  service_area?: string | null;
-  pricing_notes?: string | null;
-};
-
-// Combine the base prompt with the knowledge base so the qualification
-// filter (what we do / don't do) is always part of the system prompt.
-export function composeSystemPrompt(agent: AgentCfg, kb: BusinessKb): string {
-  const parts: string[] = [];
-  if (agent.system_prompt?.trim()) parts.push(agent.system_prompt.trim());
-  if (kb.kb_we_do?.trim()) parts.push(`# WHAT WE DO\n${kb.kb_we_do.trim()}`);
-  if (kb.kb_we_dont?.trim())
-    parts.push(`# WHAT WE DO NOT DO\n${kb.kb_we_dont.trim()}`);
-  if (kb.service_area?.trim())
-    parts.push(`# SERVICE AREA\n${kb.service_area.trim()}`);
-  if (kb.pricing_notes?.trim())
-    parts.push(`# PRICING NOTES\n${kb.pricing_notes.trim()}`);
-  return parts.join("\n\n");
+// Knowledge base is stored inside the Vapi system message, separated by a
+// header so we can split it back out on load.
+export function composeSystemMessage(
+  systemPrompt: string,
+  knowledgeBase: string
+): string {
+  const base = (systemPrompt || "").trim();
+  const kb = (knowledgeBase || "").trim();
+  return kb ? `${base}\n\n${KB_HEADER}\n${kb}` : base;
 }
 
-// GET the current assistant, merge our fields (preserving their model
-// provider/model), then PATCH — so we never clobber unrelated settings.
+export function splitSystemMessage(content: string): {
+  systemPrompt: string;
+  knowledgeBase: string;
+} {
+  const idx = content.indexOf(KB_HEADER);
+  if (idx === -1) return { systemPrompt: content.trim(), knowledgeBase: "" };
+  return {
+    systemPrompt: content.slice(0, idx).trim(),
+    knowledgeBase: content.slice(idx + KB_HEADER.length).trim(),
+  };
+}
+
+export type AgentScript = {
+  firstMessage: string;
+  systemPrompt: string;
+  knowledgeBase: string;
+};
+
+type VapiMessage = { role?: string; content?: string };
+
+// Pull the live assistant config from Vapi. Returns null if it can't.
+export async function getVapiAssistant(
+  assistantId: string
+): Promise<AgentScript | null> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key || !assistantId) return null;
+
+  const res = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+    headers: { Authorization: `Bearer ${key}` },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+
+  const a = await res.json();
+  const firstMessage: string = a.firstMessage ?? "";
+  const sysMsg: string =
+    (a.model?.messages ?? ([] as VapiMessage[])).find(
+      (m: VapiMessage) => m.role === "system"
+    )?.content ?? "";
+  const { systemPrompt, knowledgeBase } = splitSystemMessage(sysMsg);
+  return { firstMessage, systemPrompt, knowledgeBase };
+}
+
+// Push script + KB back to Vapi. GET first so we preserve the model
+// (provider/model) and any non-system messages.
 export async function updateVapiAssistant(
   assistantId: string,
-  agent: AgentCfg,
-  kb: BusinessKb
+  script: AgentScript
 ) {
   const key = process.env.VAPI_API_KEY;
   if (!key) throw new Error("VAPI_API_KEY not set");
@@ -48,30 +74,29 @@ export async function updateVapiAssistant(
 
   const getRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
     headers,
+    cache: "no-store",
   });
   if (!getRes.ok) {
     throw new Error(`Vapi GET failed (${getRes.status}): ${await getRes.text()}`);
   }
   const current = await getRes.json();
 
+  const otherMessages = (current.model?.messages ?? []).filter(
+    (m: VapiMessage) => m.role !== "system"
+  );
+
   const model = {
     ...(current.model ?? { provider: "openai", model: "gpt-4o" }),
-    messages: [{ role: "system", content: composeSystemPrompt(agent, kb) }],
+    messages: [
+      {
+        role: "system",
+        content: composeSystemMessage(script.systemPrompt, script.knowledgeBase),
+      },
+      ...otherMessages,
+    ],
   };
 
-  const body: Record<string, unknown> = {
-    firstMessage: agent.greeting ?? "",
-    model,
-  };
-  if (agent.silence_timeout_sec)
-    body.silenceTimeoutSeconds = agent.silence_timeout_sec;
-  if (agent.max_duration_sec) body.maxDurationSeconds = agent.max_duration_sec;
-  if (agent.voice_id) {
-    body.voice = {
-      provider: agent.voice_provider || "11labs",
-      voiceId: agent.voice_id,
-    };
-  }
+  const body = { firstMessage: script.firstMessage, model };
 
   const patchRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
     method: "PATCH",
