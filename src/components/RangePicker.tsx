@@ -59,6 +59,7 @@ export default function RangePicker() {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-neutral-500">{dateLabel}</span>
       <select value={current} onChange={onSelect} className={field}>
         {Object.entries(RANGE_LABELS).map(([k, l]) => (
           <option key={k} value={k}>
@@ -66,7 +67,6 @@ export default function RangePicker() {
           </option>
         ))}
       </select>
-      <span className="text-xs text-neutral-500">{dateLabel}</span>
       {showCustom && (
         <>
           <input

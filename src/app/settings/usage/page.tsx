@@ -6,6 +6,7 @@ import SettingsNav from "@/components/SettingsNav";
 import RangePicker from "@/components/RangePicker";
 
 type Row = {
+  from_number: string | null;
   cost: number | null;
   duration_sec: number | null;
   created_at: string;
@@ -51,7 +52,7 @@ export default async function UsagePage({
 
   const { data } = await supabase
     .from("calls")
-    .select("cost, duration_sec, created_at")
+    .select("from_number, cost, duration_sec, created_at")
     .eq("business_id", businessId)
     .gte("created_at", range.start.toISOString())
     .lte("created_at", range.end.toISOString())
@@ -114,6 +115,7 @@ export default async function UsagePage({
           <thead>
             <tr className="text-left text-neutral-400 border-b border-neutral-200">
               <th className="py-2 font-medium">When</th>
+              <th className="py-2 font-medium">Caller</th>
               <th className="py-2 font-medium">Duration</th>
               <th className="py-2 font-medium text-right">Cost</th>
             </tr>
@@ -122,6 +124,7 @@ export default async function UsagePage({
             {rows.slice(0, 50).map((r, i) => (
               <tr key={i} className="border-b border-neutral-100">
                 <td className="py-2">{fmtTime(r.created_at)}</td>
+                <td className="py-2">{r.from_number || "—"}</td>
                 <td className="py-2">{mins(r.duration_sec)}</td>
                 <td className="py-2 text-right">
                   {r.cost != null ? usd(r.cost) : "—"}
@@ -130,7 +133,7 @@ export default async function UsagePage({
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={3} className="py-4 text-neutral-500">
+                <td colSpan={4} className="py-4 text-neutral-500">
                   No calls in this range.
                 </td>
               </tr>

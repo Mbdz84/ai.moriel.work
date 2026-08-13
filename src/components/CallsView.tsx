@@ -126,6 +126,7 @@ function CallCard({
         <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 space-y-3">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
             <Field label="Phone" value={j?.phone || call.from_number} />
+            <Field label="Caller ID" value={call.from_number} />
             <Field label="Service" value={titleize(j?.service_type)} />
             <Field label="Property" value={titleize(j?.property_type)} />
             <div>
