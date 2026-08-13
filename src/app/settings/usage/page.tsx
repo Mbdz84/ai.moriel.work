@@ -111,7 +111,8 @@ export default async function UsagePage({
 
       <section className="space-y-2">
         <h2 className="font-semibold">Calls in range</h2>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
           <thead>
             <tr className="text-left text-neutral-400 border-b border-neutral-200">
               <th className="py-2 font-medium">When</th>
@@ -140,6 +141,7 @@ export default async function UsagePage({
             )}
           </tbody>
         </table>
+        </div>
       </section>
     </main>
   );

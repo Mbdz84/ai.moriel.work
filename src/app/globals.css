@@ -12,20 +12,65 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  font-size: 112.5%; /* larger base text across the app */
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
-/* Larger base text across the whole app (scales rem-based sizes). */
-html {
-  font-size: 112.5%;
+/* Dark theme is opt-in via the .dark class (toggle button), NOT the OS
+   setting — that auto-switch caused white-on-white / dark-on-dark clashes. */
+.dark {
+  --background: #0b0b0b;
+  --foreground: #ededed;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Reskin the light utility classes we use so components adapt to dark mode
+   without each needing dark: variants. */
+.dark .bg-white {
+  background-color: #171717;
+}
+.dark .bg-neutral-50 {
+  background-color: #1f1f1f;
+}
+.dark .bg-neutral-100 {
+  background-color: #262626;
+}
+.dark .bg-black {
+  background-color: #3a3a3a;
+}
+.dark .text-neutral-800 {
+  color: #e5e5e5;
+}
+.dark .text-neutral-700 {
+  color: #d4d4d4;
+}
+.dark .text-neutral-600 {
+  color: #b3b3b3;
+}
+.dark .text-neutral-500 {
+  color: #9a9a9a;
+}
+.dark .text-neutral-400 {
+  color: #7a7a7a;
+}
+.dark .border-neutral-200 {
+  border-color: #2c2c2c;
+}
+.dark .border-neutral-300 {
+  border-color: #3a3a3a;
+}
+.dark .divide-neutral-200 > * {
+  border-color: #2c2c2c;
+}
+.dark .divide-neutral-100 > * {
+  border-color: #262626;
 }
