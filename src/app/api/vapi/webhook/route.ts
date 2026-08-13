@@ -81,6 +81,8 @@ export async function POST(req: NextRequest) {
         : null,
       status: "completed",
       ended_reason: endedReason,
+      // Vapi reports the call cost (USD) in the end-of-call-report.
+      cost: message?.cost ?? call?.cost ?? null,
       // Recording + transcript live under message.artifact in end-of-call-report.
       recording_url:
         artifact?.recording?.url ??

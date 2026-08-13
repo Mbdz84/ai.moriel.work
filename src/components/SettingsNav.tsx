@@ -6,7 +6,7 @@ export default function SettingsNav({
   active,
   admin,
 }: {
-  active: "dispatch" | "agent" | "company" | "account";
+  active: "dispatch" | "agent" | "company" | "usage" | "account";
   admin: boolean;
 }) {
   const base = "text-sm px-3 py-1.5 rounded";
@@ -25,6 +25,9 @@ export default function SettingsNav({
           </Link>
           <Link href="/settings/company" className={item("company")}>
             Company
+          </Link>
+          <Link href="/settings/usage" className={item("usage")}>
+            Usage
           </Link>
         </>
       )}

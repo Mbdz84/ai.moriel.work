@@ -6,6 +6,7 @@ export type Membership = {
   role: string;
   name: string;
   company_id: string;
+  own: boolean; // true if the user is a real member (not just super-admin access)
 };
 
 const COOKIE = "active_business";
@@ -27,6 +28,12 @@ export async function getMemberships(
 ): Promise<Membership[]> {
   const { data: superFlag } = await supabase.rpc("is_super_admin");
   if (superFlag === true) {
+    // The user's real memberships (to flag which companies are actually theirs).
+    const { data: mine } = await supabase
+      .from("memberships")
+      .select("business_id");
+    const ownIds = new Set((mine ?? []).map((r) => r.business_id as string));
+
     const { data } = await supabase
       .from("businesses")
       .select("id, name, company_id")
@@ -35,9 +42,10 @@ export async function getMemberships(
       (data ?? []) as { id: string; name: string | null; company_id: string | null }[]
     ).map((b) => ({
       business_id: b.id,
-      role: "super",
+      role: ownIds.has(b.id) ? "owner" : "super",
       name: b.name ?? "",
       company_id: b.company_id ?? "",
+      own: ownIds.has(b.id),
     }));
   }
 
@@ -51,6 +59,7 @@ export async function getMemberships(
     role: m.role ?? "owner",
     name: m.businesses?.name ?? "",
     company_id: m.businesses?.company_id ?? "",
+    own: true,
   }));
 }
 

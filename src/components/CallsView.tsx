@@ -18,6 +18,7 @@ export type Call = {
   id: string;
   from_number: string | null;
   duration_sec: number | null;
+  cost: number | null;
   status: string | null;
   ended_reason: string | null;
   recording_url: string | null;
@@ -128,6 +129,10 @@ function CallCard({
             <Field label="Service" value={titleize(j?.service_type)} />
             <Field label="Property" value={titleize(j?.property_type)} />
             <Field label="Duration" value={fmtDuration(call.duration_sec)} />
+            <Field
+              label="Cost"
+              value={call.cost != null ? `$${call.cost.toFixed(2)}` : null}
+            />
             <div className="col-span-2">
               <Field label="Address" value={j?.address} />
             </div>

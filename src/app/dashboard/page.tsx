@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   const { data: calls } = await supabase
     .from("calls")
     .select(
-      "id, from_number, duration_sec, status, ended_reason, recording_url, transcript, created_at, jobs(*)"
+      "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, jobs(*)"
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false })

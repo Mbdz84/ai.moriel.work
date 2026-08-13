@@ -24,17 +24,40 @@ export default function CompanySwitcher({
     router.refresh();
   }
 
+  const mine = memberships.filter((m) => m.own);
+  const others = memberships.filter((m) => !m.own);
+  const label = (m: Membership) => `${m.name} · ${m.company_id}`;
+
   return (
     <select
       value={activeId}
       onChange={onChange}
-      className="text-sm border border-neutral-300 rounded px-2 py-1 bg-white"
+      className="text-sm border border-neutral-300 rounded px-2 py-1 bg-white max-w-56"
     >
-      {memberships.map((m) => (
-        <option key={m.business_id} value={m.business_id}>
-          {m.name} · {m.company_id}
-        </option>
-      ))}
+      {others.length > 0 ? (
+        <>
+          <optgroup label="Mine">
+            {mine.map((m) => (
+              <option key={m.business_id} value={m.business_id}>
+                ★ {label(m)}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="All companies (super admin)">
+            {others.map((m) => (
+              <option key={m.business_id} value={m.business_id}>
+                {label(m)}
+              </option>
+            ))}
+          </optgroup>
+        </>
+      ) : (
+        memberships.map((m) => (
+          <option key={m.business_id} value={m.business_id}>
+            {label(m)}
+          </option>
+        ))
+      )}
       <option value="__add__">+ Add company…</option>
     </select>
   );
