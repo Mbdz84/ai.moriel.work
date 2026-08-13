@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getActiveBusiness } from "@/lib/tenant";
+import { getActiveBusiness, isAdmin } from "@/lib/tenant";
 import LogoutButton from "@/components/LogoutButton";
 import CompanySwitcher from "@/components/CompanySwitcher";
 
@@ -12,6 +12,7 @@ export default async function TopBar() {
   if (!user) return null;
 
   const { active, memberships } = await getActiveBusiness(supabase);
+  const admin = isAdmin(active?.role);
 
   return (
     <header className="border-b border-neutral-200 bg-white">
@@ -24,13 +25,30 @@ export default async function TopBar() {
             <Link href="/dashboard" className="text-neutral-600 hover:text-black">
               Dashboard
             </Link>
-            <Link href="/settings" className="text-neutral-600 hover:text-black">
-              Settings
-            </Link>
+            {admin ? (
+              <Link
+                href="/settings"
+                className="text-neutral-600 hover:text-black"
+              >
+                Settings
+              </Link>
+            ) : (
+              <Link
+                href="/settings/account"
+                className="text-neutral-600 hover:text-black"
+              >
+                Account
+              </Link>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-4 text-sm">
+          {active?.role === "super" && (
+            <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
+              SUPER
+            </span>
+          )}
           {active && (
             <CompanySwitcher
               memberships={memberships}

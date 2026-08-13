@@ -10,16 +10,37 @@ export type Membership = {
 
 const COOKIE = "active_business";
 
+export function isAdmin(role?: string | null): boolean {
+  return role === "owner" || role === "admin" || role === "super";
+}
+
 type Row = {
   business_id: string;
   role: string | null;
   businesses: { name: string | null; company_id: string | null } | null;
 };
 
-// All companies the logged-in user belongs to.
+// All companies the logged-in user can access. A super admin sees every
+// company; everyone else sees the ones they're a member of.
 export async function getMemberships(
   supabase: SupabaseClient
 ): Promise<Membership[]> {
+  const { data: superFlag } = await supabase.rpc("is_super_admin");
+  if (superFlag === true) {
+    const { data } = await supabase
+      .from("businesses")
+      .select("id, name, company_id")
+      .order("name", { ascending: true });
+    return (
+      (data ?? []) as { id: string; name: string | null; company_id: string | null }[]
+    ).map((b) => ({
+      business_id: b.id,
+      role: "super",
+      name: b.name ?? "",
+      company_id: b.company_id ?? "",
+    }));
+  }
+
   const { data } = await supabase
     .from("memberships")
     .select("business_id, role, businesses(name, company_id)")

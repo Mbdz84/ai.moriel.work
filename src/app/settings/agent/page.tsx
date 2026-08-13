@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getActiveBusiness } from "@/lib/tenant";
+import { getActiveBusiness, isAdmin } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
 import { getVapiAssistant } from "@/lib/vapi";
 import { saveAgent } from "./actions";
@@ -18,8 +18,9 @@ export default async function AgentSettingsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { businessId } = await getActiveBusiness(supabase);
+  const { businessId, active } = await getActiveBusiness(supabase);
   if (!businessId) redirect("/dashboard");
+  if (!isAdmin(active?.role)) redirect("/dashboard");
 
   const { data: agent } = await supabase
     .from("agents")
@@ -46,7 +47,7 @@ export default async function AgentSettingsPage({
     <main className="mx-auto max-w-2xl p-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">AI Agent</h1>
-        <SettingsNav active="agent" />
+        <SettingsNav active="agent" admin={true} />
       </div>
 
       <p className="text-sm text-neutral-500">

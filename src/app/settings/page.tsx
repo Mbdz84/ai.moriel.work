@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getActiveBusiness } from "@/lib/tenant";
+import { getActiveBusiness, isAdmin } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
 import { saveSettings } from "./actions";
 
@@ -19,6 +19,7 @@ export default async function SettingsPage({
 
   const { businessId, active } = await getActiveBusiness(supabase);
   if (!businessId) redirect("/dashboard");
+  if (!isAdmin(active?.role)) redirect("/dashboard");
 
   const business = active
     ? { name: active.name, company_id: active.company_id }
@@ -44,7 +45,7 @@ export default async function SettingsPage({
     <main className="min-h-screen p-8 max-w-xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Settings</h1>
-        <SettingsNav active="dispatch" />
+        <SettingsNav active="dispatch" admin={true} />
       </div>
 
       {business && (
