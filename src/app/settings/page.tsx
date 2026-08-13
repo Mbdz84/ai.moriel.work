@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getActiveBusiness } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
 import { saveSettings } from "./actions";
 
@@ -16,16 +17,12 @@ export default async function SettingsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("business_id, businesses(name, company_id)")
-    .maybeSingle();
-  const businessId = membership?.business_id as string | undefined;
+  const { businessId, active } = await getActiveBusiness(supabase);
   if (!businessId) redirect("/dashboard");
 
-  const business = membership?.businesses as
-    | { name: string; company_id: string }
-    | undefined;
+  const business = active
+    ? { name: active.name, company_id: active.company_id }
+    : undefined;
 
   const { data: cred } = await supabase
     .from("credentials")
@@ -111,7 +108,7 @@ export default async function SettingsPage({
             <input
               name="sms_to"
               defaultValue={dispatch?.sms_to ?? ""}
-              placeholder="+1..."
+              placeholder="+12223334444"
               className={input}
             />
           </div>

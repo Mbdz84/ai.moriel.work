@@ -70,9 +70,9 @@ export default function SignupPage() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
+          className="w-full rounded bg-blue-600 hover:bg-blue-700 text-white py-2 disabled:opacity-50"
         >
-          {loading ? "Creating…" : "Continue"}
+          {loading ? "Creating…" : "Sign up"}
         </button>
 
         <p className="text-sm text-neutral-500">

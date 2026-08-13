@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getActiveBusiness } from "@/lib/tenant";
 import AutoRefresh from "@/components/AutoRefresh";
 import CallsView, { type Call } from "@/components/CallsView";
 
@@ -11,15 +12,12 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("business_id, businesses(name, company_id)")
-    .maybeSingle();
-  const business = membership?.businesses as
-    | { name: string; company_id: string }
-    | undefined;
+  const { businessId, active } = await getActiveBusiness(supabase);
+  const business = active
+    ? { name: active.name, company_id: active.company_id }
+    : undefined;
 
-  if (!membership?.business_id) {
+  if (!businessId) {
     return (
       <main className="mx-auto max-w-6xl p-8">
         <p className="text-amber-600">
@@ -38,6 +36,7 @@ export default async function DashboardPage() {
     .select(
       "id, from_number, duration_sec, status, ended_reason, recording_url, transcript, created_at, jobs(*)"
     )
+    .eq("business_id", businessId)
     .order("created_at", { ascending: false })
     .limit(50);
 

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getActiveBusiness } from "@/lib/tenant";
 import { updateVapiAssistant } from "@/lib/vapi";
 
 export async function saveAgent(formData: FormData) {
@@ -12,11 +13,7 @@ export async function saveAgent(formData: FormData) {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("business_id")
-    .maybeSingle();
-  const businessId = membership?.business_id as string | undefined;
+  const { businessId } = await getActiveBusiness(supabase);
   if (!businessId) redirect("/dashboard");
 
   const str = (k: string) => String(formData.get(k) ?? "").trim();

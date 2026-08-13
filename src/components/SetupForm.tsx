@@ -4,12 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowser } from "@/lib/supabase-browser";
 
-// Company-creation step. Used both right after signup and by an existing
-// logged-in account that has no company yet ("finish setup").
+// Company-creation step. Used right after signup and by an existing
+// logged-in account adding another company. The account number (company_id)
+// is auto-generated server-side.
 export default function SetupForm() {
   const router = useRouter();
   const [companyName, setCompanyName] = useState("");
-  const [companyId, setCompanyId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -18,18 +18,16 @@ export default function SetupForm() {
     setError(null);
     setLoading(true);
     const supabase = createSupabaseBrowser();
-    const { error } = await supabase.rpc("register_company", {
-      p_company_id: companyId,
+    const { data, error } = await supabase.rpc("register_company", {
       p_company_name: companyName,
     });
     setLoading(false);
     if (error) {
-      setError(
-        error.message.includes("already taken")
-          ? "That Company ID is already in use. Pick a different one."
-          : error.message
-      );
+      setError(error.message);
       return;
+    }
+    if (data) {
+      document.cookie = `active_business=${data}; path=/; max-age=31536000; samesite=lax`;
     }
     router.push("/dashboard");
     router.refresh();
@@ -47,25 +45,13 @@ export default function SetupForm() {
           className="w-full rounded border border-neutral-300 px-3 py-2"
         />
       </div>
-      <div>
-        <label className="text-sm text-neutral-600">
-          Company ID (account number or phone)
-        </label>
-        <input
-          required
-          placeholder="00123"
-          value={companyId}
-          onChange={(e) => setCompanyId(e.target.value)}
-          className="w-full rounded border border-neutral-300 px-3 py-2"
-        />
-      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded bg-black text-white py-2 disabled:opacity-50"
+        className="w-full rounded bg-blue-600 hover:bg-blue-700 text-white py-2 disabled:opacity-50"
       >
         {loading ? "Creating…" : "Create company"}
       </button>

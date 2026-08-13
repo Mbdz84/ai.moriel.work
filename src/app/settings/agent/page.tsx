@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getActiveBusiness } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
 import { getVapiAssistant } from "@/lib/vapi";
 import { saveAgent } from "./actions";
@@ -17,11 +18,7 @@ export default async function AgentSettingsPage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("business_id")
-    .maybeSingle();
-  const businessId = membership?.business_id as string | undefined;
+  const { businessId } = await getActiveBusiness(supabase);
   if (!businessId) redirect("/dashboard");
 
   const { data: agent } = await supabase

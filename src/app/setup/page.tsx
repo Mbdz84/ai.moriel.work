@@ -9,13 +9,7 @@ export default async function SetupPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  // Already has a company? Go to the dashboard.
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("business_id")
-    .maybeSingle();
-  if (membership?.business_id) redirect("/dashboard");
-
+  // Reachable for first-time setup AND for adding another company.
   return (
     <main className="min-h-screen flex items-center justify-center p-8">
       <div className="w-full max-w-sm space-y-4">
