@@ -4,6 +4,31 @@
 
 const KB_HEADER = "# KNOWLEDGE BASE";
 
+// Fetch a call from Vapi and return the first structured-output result.
+// Used as a fallback because extraction can finish a few seconds AFTER the
+// end-of-call webhook fires.
+export async function fetchCallExtract(
+  callId: string
+): Promise<Record<string, unknown> | null> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key) return null;
+  try {
+    const r = await fetch(`https://api.vapi.ai/call/${callId}`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (!r.ok) return null;
+    const c = await r.json();
+    const so = c?.artifact?.structuredOutputs ?? c?.analysis?.structuredOutputs ?? {};
+    const first = Object.values(so)[0] as
+      | { result?: Record<string, unknown> }
+      | undefined;
+    return first?.result ?? c?.analysis?.structuredData ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Knowledge base is stored inside the Vapi system message, separated by a
 // header so we can split it back out on load.
 export function composeSystemMessage(

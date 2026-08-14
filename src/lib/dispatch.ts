@@ -66,19 +66,30 @@ export async function dispatchJob(
 
   const body = formatJobMessage(data);
 
-  // ---- SMS ----
-  const smsTo = target?.sms_to || process.env.DISPATCH_SMS_TO || "";
+  // ---- SMS (one or more recipients) ----
+  const raw = target?.sms_to || process.env.DISPATCH_SMS_TO || "";
+  const numbers = raw
+    .split(/[,\n;]+/)
+    .map((n) => n.trim())
+    .filter(Boolean);
   const smsEnabled = target ? target.sms_enabled !== false : true;
-  if (smsEnabled && smsTo) {
-    try {
-      await sendSms(smsTo, body, {
-        sid: cred?.twilio_account_sid,
-        token: cred?.twilio_auth_token,
-        from: cred?.twilio_number,
-      });
+  if (smsEnabled && numbers.length > 0) {
+    const creds = {
+      sid: cred?.twilio_account_sid,
+      token: cred?.twilio_auth_token,
+      from: cred?.twilio_number,
+    };
+    let anySent = false;
+    for (const n of numbers) {
+      try {
+        await sendSms(n, body, creds);
+        anySent = true;
+      } catch (e) {
+        console.error(`SMS to ${n} failed:`, e);
+      }
+    }
+    if (anySent) {
       await supabase.from("jobs").update({ dispatched_sms: true }).eq("id", jobId);
-    } catch (e) {
-      console.error("SMS dispatch failed:", e);
     }
   } else {
     console.warn("SMS skipped: no destination number configured");

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { dispatchJob } from "@/lib/dispatch";
+import { fetchCallExtract } from "@/lib/vapi";
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ============================================================
 // Vapi end-of-call webhook.
@@ -57,13 +60,31 @@ export async function POST(req: NextRequest) {
     qualified?: boolean;
     notes?: string;
   };
-  const artifact = message?.artifact ?? {};
-  const structuredOutputs = artifact?.structuredOutputs ?? {};
+  // Artifact can live at message.artifact or message.call.artifact.
+  const artifact = message?.artifact ?? call?.artifact ?? {};
+  const structuredOutputs =
+    artifact?.structuredOutputs ?? message?.analysis?.structuredOutputs ?? {};
   const firstOutput = Object.values(structuredOutputs)[0] as
     | { result?: JobData }
     | undefined;
-  const data: JobData =
+  let data: JobData =
     firstOutput?.result ?? message?.analysis?.structuredData ?? {};
+
+  // Extraction often finishes a few seconds AFTER this webhook fires, so if
+  // the payload has no data, pull it from Vapi's call API (with one retry).
+  if (
+    (!data || Object.keys(data).length === 0) &&
+    call?.id &&
+    process.env.VAPI_API_KEY
+  ) {
+    let fetched = await fetchCallExtract(call.id);
+    if (!fetched) {
+      await sleep(3000);
+      fetched = await fetchCallExtract(call.id);
+    }
+    if (fetched) data = fetched as JobData;
+  }
+
   const endedReason = message?.endedReason ?? call?.endedReason ?? null;
 
   // 2) Store the call.

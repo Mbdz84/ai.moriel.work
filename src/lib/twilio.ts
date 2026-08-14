@@ -37,3 +37,28 @@ export async function sendSms(to: string, body: string, creds?: TwilioCreds) {
   }
   return res.json();
 }
+
+// Current Twilio account balance, e.g. "12.34 USD". null if unavailable.
+export async function getTwilioBalance(
+  sid?: string | null,
+  token?: string | null
+): Promise<string | null> {
+  const s = sid || process.env.TWILIO_ACCOUNT_SID;
+  const t = token || process.env.TWILIO_AUTH_TOKEN;
+  if (!s || !t) return null;
+  try {
+    const auth = Buffer.from(`${s}:${t}`).toString("base64");
+    const res = await fetch(
+      `https://api.twilio.com/2010-04-01/Accounts/${s}/Balance.json`,
+      { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" }
+    );
+    if (!res.ok) return null;
+    const d = await res.json();
+    const bal = parseFloat(d.balance);
+    if (isNaN(bal)) return null;
+    return `${bal.toFixed(2)} ${d.currency || "USD"}`;
+  } catch {
+    return null;
+  }
+}
+

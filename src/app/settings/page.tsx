@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { getActiveBusiness, isAdmin } from "@/lib/tenant";
+import { getTwilioBalance } from "@/lib/twilio";
 import SettingsNav from "@/components/SettingsNav";
+import TwilioCredentials from "@/components/TwilioCredentials";
+import SmsRecipients from "@/components/SmsRecipients";
 import { saveSettings } from "./actions";
 
 export default async function SettingsPage({
@@ -21,13 +24,9 @@ export default async function SettingsPage({
   if (!businessId) redirect("/dashboard");
   if (!isAdmin(active?.role)) redirect("/dashboard");
 
-  const business = active
-    ? { name: active.name, company_id: active.company_id }
-    : undefined;
-
   const { data: cred } = await supabase
     .from("credentials")
-    .select("*")
+    .select("twilio_account_sid, twilio_auth_token, twilio_number")
     .eq("business_id", businessId)
     .maybeSingle();
 
@@ -37,8 +36,18 @@ export default async function SettingsPage({
     .eq("business_id", businessId)
     .maybeSingle();
 
-  const input =
-    "w-full rounded border border-neutral-300 px-3 py-2 text-sm";
+  // Compute masked values server-side — the real SID/token never reach the client.
+  const sid = (cred?.twilio_account_sid as string | null) || "";
+  const token = (cred?.twilio_auth_token as string | null) || "";
+  const connected = Boolean(sid && token);
+  const balance = connected ? await getTwilioBalance(sid, token) : null;
+
+  const smsNumbers = String(dispatch?.sms_to ?? "")
+    .split(/[,\n;]+/)
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  const input = "w-full rounded border border-neutral-300 px-3 py-2 text-sm";
   const label = "text-sm font-medium text-neutral-700";
 
   return (
@@ -48,96 +57,66 @@ export default async function SettingsPage({
         <SettingsNav active="dispatch" admin={true} />
       </div>
 
-      {business && (
+      {active && (
         <p className="text-sm text-neutral-500">
-          {business.name} · Company ID {business.company_id}
+          {active.name} · Company ID {active.company_id}
         </p>
       )}
 
       {saved && (
         <p className="rounded bg-green-50 text-green-700 text-sm px-3 py-2">
-          Settings saved.
+          Saved.
         </p>
       )}
 
-      <form action={saveSettings} className="space-y-6">
-        <section className="space-y-3">
-          <h2 className="font-semibold">Twilio credentials</h2>
-          <div className="space-y-1">
-            <label className={label}>Account SID</label>
-            <input
-              name="twilio_account_sid"
-              defaultValue={cred?.twilio_account_sid ?? ""}
-              placeholder="ACxxxxxxxx"
-              className={input}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={label}>Auth Token</label>
-            <input
-              name="twilio_auth_token"
-              type="password"
-              defaultValue={cred?.twilio_auth_token ?? ""}
-              placeholder="your auth token"
-              className={input}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className={label}>Twilio From Number</label>
-            <input
-              name="twilio_number"
-              defaultValue={cred?.twilio_number ?? ""}
-              placeholder="+1..."
-              className={input}
-            />
-          </div>
-        </section>
+      <TwilioCredentials
+        connected={connected}
+        sidLast4={sid ? sid.slice(-4) : null}
+        hasToken={Boolean(token)}
+        fromNumber={(cred?.twilio_number as string | null) ?? ""}
+        balance={balance}
+      />
 
-        <section className="space-y-3">
-          <h2 className="font-semibold">Dispatch</h2>
+      <form action={saveSettings} className="space-y-4">
+        <h2 className="font-semibold">Dispatch</h2>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="sms_enabled"
-              defaultChecked={dispatch?.sms_enabled ?? true}
-            />
-            Send job SMS on call end
-          </label>
-          <div className="space-y-1">
-            <label className={label}>SMS destination (your phone)</label>
-            <input
-              name="sms_to"
-              defaultValue={dispatch?.sms_to ?? ""}
-              placeholder="+12223334444"
-              className={input}
-            />
-          </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="sms_enabled"
+            defaultChecked={dispatch?.sms_enabled ?? true}
+          />
+          Send job SMS on call end
+        </label>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="json_enabled"
-              defaultChecked={dispatch?.json_enabled ?? false}
-            />
-            Also POST job as JSON to a custom URL
-          </label>
-          <div className="space-y-1">
-            <label className={label}>Custom JSON endpoint</label>
-            <input
-              name="json_url"
-              defaultValue={dispatch?.json_url ?? ""}
-              placeholder="https://your-crm.example.com/webhook"
-              className={input}
-            />
-          </div>
-        </section>
+        <div className="space-y-1">
+          <label className={label}>SMS recipients</label>
+          <SmsRecipients initial={smsNumbers} />
+        </div>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="json_enabled"
+            defaultChecked={dispatch?.json_enabled ?? false}
+          />
+          Also POST job as JSON to a custom URL
+        </label>
+        <div className="space-y-1">
+          <label className={label}>Custom JSON endpoint</label>
+          <input
+            name="json_url"
+            defaultValue={dispatch?.json_url ?? ""}
+            placeholder="https://your-crm.example.com/webhook"
+            className={input}
+          />
+        </div>
 
         <button
           type="submit"
           className="rounded bg-black text-white px-4 py-2 text-sm"
         >
-          Save settings
+          Save dispatch settings
         </button>
       </form>
     </main>
