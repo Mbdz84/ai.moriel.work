@@ -8,7 +8,6 @@ export type Job = {
   address: string | null;
   property_type: string | null;
   service_type: string | null;
-  urgency: string | null;
   qualified: boolean | null;
   notes: string | null;
   dispatched_sms: boolean | null;
@@ -32,6 +31,18 @@ function titleize(s: string | null | undefined) {
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Compare phone numbers by their last 10 digits (ignores formatting/+1).
+function samePhone(a?: string | null, b?: string | null) {
+  const n = (s?: string | null) => (s || "").replace(/\D/g, "").slice(-10);
+  return n(a) && n(a) === n(b);
+}
+
+// A value is a real phone number only if it carries enough digits (guards
+// against placeholder text like "same number").
+function isRealPhone(s?: string | null) {
+  return !!s && (s || "").replace(/\D/g, "").length >= 7;
+}
+
 function fmtDuration(s: number | null) {
   if (!s) return "—";
   const m = Math.floor(s / 60);
@@ -49,11 +60,13 @@ function fmtTime(iso: string) {
 
 function buildSms(businessName: string, call: Call): string {
   const j = call.jobs?.[0];
+  // Fall back to the caller ID when the collected phone isn't a real number.
+  const phone = isRealPhone(j?.phone) ? j?.phone : call.from_number || j?.phone;
   return [
     businessName,
     `Name: ${j?.customer_name || "—"}`,
     `Address: ${j?.address || "—"}`,
-    `Phone: ${j?.phone || call.from_number || "—"}`,
+    `Phone: ${phone || "—"}`,
     `Type: ${titleize(j?.service_type) || "—"}`,
     `Description: ${j?.notes || titleize(j?.property_type) || "—"}`,
   ].join("\n");
@@ -104,11 +117,6 @@ function CallCard({
           <span className="font-medium">
             {j?.customer_name || call.from_number || "Unknown caller"}
           </span>
-          {j?.urgency === "emergency" && (
-            <span className="rounded bg-red-100 text-red-700 text-xs px-2 py-0.5">
-              emergency
-            </span>
-          )}
           {j?.qualified === false && (
             <span className="rounded bg-amber-100 text-amber-700 text-xs px-2 py-0.5">
               out of scope
@@ -125,8 +133,10 @@ function CallCard({
         {/* LEFT inner box — call data */}
         <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 space-y-3">
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-            <Field label="Phone" value={j?.phone || call.from_number} />
             <Field label="Caller ID" value={call.from_number} />
+            {j?.phone && !samePhone(j.phone, call.from_number) && (
+              <Field label="Callback #" value={j.phone} />
+            )}
             <Field label="Service" value={titleize(j?.service_type)} />
             <Field label="Property" value={titleize(j?.property_type)} />
             <div>

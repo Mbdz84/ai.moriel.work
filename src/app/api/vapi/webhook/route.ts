@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { dispatchJob } from "@/lib/dispatch";
+import { dispatchJob, resolveCallbackPhone } from "@/lib/dispatch";
 import { fetchCallExtract } from "@/lib/vapi";
+import { validateAddress } from "@/lib/address";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest) {
   // --- Identify tenant. Map the dialed number -> business. ---
   const call = message?.call ?? {};
   const toNumber = call?.phoneNumber?.number ?? call?.customer?.number ?? null;
+  // The number the caller dialed from — used as the callback fallback when the
+  // caller says "use the same number".
+  const callerNumber = call?.customer?.number ?? null;
 
   // TODO: resolve business_id from the dialed number.
   // For the first single-business test, hardcode via env; multi-tenant lookup later.
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
     address?: string;
     property_type?: string;
     service_type?: string;
-    urgency?: string;
+    vehicle?: string;
     qualified?: boolean;
     notes?: string;
   };
@@ -87,13 +91,19 @@ export async function POST(req: NextRequest) {
 
   const endedReason = message?.endedReason ?? call?.endedReason ?? null;
 
+  // --- Normalize the spoken address via Google (optional, best-effort). ---
+  // Stores the clean single line; the SMS shows a two-line postal format.
+  const validated = await validateAddress(data?.address);
+  const dbAddress = validated ? validated.oneLine : data?.address ?? null;
+  if (validated) data.address = validated.oneLine;
+
   // 2) Store the call.
   const { data: callRow, error: callErr } = await supabase
     .from("calls")
     .insert({
       business_id: businessId,
       vapi_call_id: call?.id ?? null,
-      from_number: call?.customer?.number ?? null,
+      from_number: callerNumber,
       to_number: toNumber,
       started_at: message?.startedAt ?? null,
       ended_at: message?.endedAt ?? null,
@@ -125,6 +135,8 @@ export async function POST(req: NextRequest) {
   }
 
   // 3) Store the job (only if the agent captured something usable).
+  //    Persist the resolved callback number so "use the same number" still
+  //    lands a real phone number, and the validated address.
   const qualified = data?.qualified !== false;
   const { data: jobRow } = await supabase
     .from("jobs")
@@ -132,11 +144,10 @@ export async function POST(req: NextRequest) {
       business_id: businessId,
       call_id: callRow.id,
       customer_name: data?.name ?? null,
-      phone: data?.phone ?? call?.customer?.number ?? null,
-      address: data?.address ?? null,
+      phone: resolveCallbackPhone(data?.phone, callerNumber) || null,
+      address: dbAddress,
       property_type: data?.property_type ?? null,
       service_type: data?.service_type ?? null,
-      urgency: data?.urgency ?? null,
       qualified,
       notes: data?.notes ?? null,
     })
@@ -146,7 +157,9 @@ export async function POST(req: NextRequest) {
   // 4) Dispatch: SMS via Twilio + optional custom JSON push.
   //    Failures are logged inside dispatchJob and don't fail the webhook.
   if (jobRow?.id) {
-    await dispatchJob(supabase, businessId, jobRow.id, data);
+    await dispatchJob(supabase, businessId, jobRow.id, data, callerNumber, {
+      smsAddress: validated?.twoLine,
+    });
   }
 
   return NextResponse.json({ ok: true, call_id: callRow.id, job_id: jobRow?.id });

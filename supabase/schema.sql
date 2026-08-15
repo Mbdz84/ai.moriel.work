@@ -60,6 +60,7 @@ create table if not exists dispatch_targets (
   business_id   uuid not null references businesses(id) on delete cascade,
   sms_enabled   boolean default true,
   sms_to        text default '',                -- your phone number to receive the job
+  sms_template  text default '',                -- how the job text is formatted (see /settings/sms)
   json_enabled  boolean default false,
   json_url      text default '',                -- custom CRM webhook
   json_headers  jsonb default '{}'::jsonb,      -- e.g. auth headers
@@ -112,7 +113,6 @@ create table if not exists jobs (
   address       text,
   property_type text,                            -- car | house | business
   service_type  text,                            -- lockout | car_key_replacement | rekey | new_locks | other
-  urgency       text,                            -- emergency | normal
   qualified     boolean default true,            -- false if KB rejected it (e.g. helicopter key)
   notes         text,
   dispatched_sms  boolean default false,

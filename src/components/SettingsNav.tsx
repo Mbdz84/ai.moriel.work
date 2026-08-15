@@ -6,7 +6,7 @@ export default function SettingsNav({
   active,
   admin,
 }: {
-  active: "dispatch" | "agent" | "company" | "usage" | "account";
+  active: "dispatch" | "sms" | "agent" | "company" | "usage" | "account";
   admin: boolean;
 }) {
   const base = "text-sm px-3 py-1.5 rounded";
@@ -19,6 +19,9 @@ export default function SettingsNav({
         <>
           <Link href="/settings" className={item("dispatch")}>
             Dispatch &amp; Twilio
+          </Link>
+          <Link href="/settings/sms" className={item("sms")}>
+            SMS
           </Link>
           <Link href="/settings/agent" className={item("agent")}>
             AI Agent
