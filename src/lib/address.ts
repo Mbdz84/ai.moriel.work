@@ -7,11 +7,11 @@
 // Docs: https://developers.google.com/maps/documentation/address-validation
 
 export type ValidatedAddress = {
-  // Clean single line, e.g. "9707 N Le Claire Ave, Skokie, IL 60077" (stored
+  // Clean single line, e.g. "9707 Le Claire Ave, Skokie, IL 60077" (stored
   // in the DB / sent to the JSON webhook).
   oneLine: string;
   // Two-line postal format for the SMS:
-  //   9707 N Le Claire Ave
+  //   9707 Le Claire Ave
   //   Skokie, IL 60077
   twoLine: string;
 };
@@ -41,9 +41,11 @@ export async function validateAddress(
     if (!pa) return null;
 
     const street = (pa.addressLines ?? []).join(" ").trim();
+    // 5-digit ZIP only — drop the +4 (e.g. "60613-4566" -> "60613").
+    const zip5 = (pa.postalCode ?? "").match(/\d{5}/)?.[0] ?? "";
     const cityLine = [
       pa.locality,
-      [pa.administrativeArea, pa.postalCode].filter(Boolean).join(" "),
+      [pa.administrativeArea, zip5].filter(Boolean).join(" "),
     ]
       .filter(Boolean)
       .join(", ");
@@ -51,9 +53,8 @@ export async function validateAddress(
     const twoLine = [street, cityLine].filter(Boolean).join("\n");
     if (!twoLine) return null;
 
-    const oneLine =
-      (addr.formattedAddress as string | undefined)?.replace(/,?\s*USA$/, "") ||
-      [street, cityLine].filter(Boolean).join(", ");
+    // Build the one-line from the same parts so the ZIP is 5-digit here too.
+    const oneLine = [street, cityLine].filter(Boolean).join(", ");
 
     return { oneLine, twoLine };
   } catch {
