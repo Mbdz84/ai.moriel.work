@@ -115,9 +115,16 @@ export default function NavBar({
             </div>
 
             {active && (
-              <p className="text-sm text-neutral-500">
-                {active.name} · {active.company_id}
-              </p>
+              <div className="flex items-center gap-2">
+                {active.role === "super" && (
+                  <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
+                    SUPER
+                  </span>
+                )}
+                <p className="text-sm text-neutral-500">
+                  {active.name} · {active.company_id}
+                </p>
+              </div>
             )}
 
             <div className="flex flex-col gap-3 text-base">{links}</div>
