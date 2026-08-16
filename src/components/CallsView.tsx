@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export type Job = {
   customer_name: string | null;
@@ -11,6 +11,8 @@ export type Job = {
   qualified: boolean | null;
   notes: string | null;
   dispatched_sms: boolean | null;
+  dispatched_json: boolean | null;
+  details: Record<string, unknown> | null;
 };
 
 export type Call = {
@@ -23,22 +25,22 @@ export type Call = {
   recording_url: string | null;
   transcript: string | null;
   created_at: string;
+  spam: boolean | null;
   jobs: Job[];
 };
+
+type Filter = "all" | "qualified" | "out_of_scope" | "spam" | "not_texted";
 
 function titleize(s: string | null | undefined) {
   if (!s) return "";
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// Compare phone numbers by their last 10 digits (ignores formatting/+1).
 function samePhone(a?: string | null, b?: string | null) {
   const n = (s?: string | null) => (s || "").replace(/\D/g, "").slice(-10);
   return n(a) && n(a) === n(b);
 }
 
-// A value is a real phone number only if it carries enough digits (guards
-// against placeholder text like "same number").
 function isRealPhone(s?: string | null) {
   return !!s && (s || "").replace(/\D/g, "").length >= 7;
 }
@@ -58,15 +60,32 @@ function fmtTime(iso: string) {
   });
 }
 
+// "2h", "3d" relative label; full timestamp on hover.
+function relTime(iso: string) {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const d = Math.floor(hr / 24);
+  if (d < 7) return `${d}d`;
+  return fmtTime(iso);
+}
+
+function callbackOf(call: Call) {
+  const j = call.jobs?.[0];
+  return isRealPhone(j?.phone) ? j?.phone : call.from_number || j?.phone;
+}
+
 function buildSms(businessName: string, call: Call): string {
   const j = call.jobs?.[0];
-  // Fall back to the caller ID when the collected phone isn't a real number.
-  const phone = isRealPhone(j?.phone) ? j?.phone : call.from_number || j?.phone;
   return [
     businessName,
     `Name: ${j?.customer_name || "—"}`,
     `Address: ${j?.address || "—"}`,
-    `Phone: ${phone || "—"}`,
+    `Phone: ${callbackOf(call) || "—"}`,
     `Type: ${titleize(j?.service_type) || "—"}`,
     `Description: ${j?.notes || titleize(j?.property_type) || "—"}`,
   ].join("\n");
@@ -99,32 +118,53 @@ function Field({
   );
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, spam }: { name: string; spam?: boolean }) {
   return (
-    <div className="flex-none w-9 h-9 rounded-lg bg-neutral-100 text-neutral-600 grid place-items-center text-sm font-semibold">
-      {initials(name)}
+    <div
+      className={`flex-none w-9 h-9 rounded-lg grid place-items-center text-sm font-semibold ${
+        spam
+          ? "bg-rose-100 text-rose-600"
+          : "bg-indigo-50 text-indigo-600"
+      }`}
+    >
+      {spam ? "!" : initials(name)}
     </div>
   );
 }
 
-function StatusBadge({ job }: { job?: Job }) {
+function StatusBadge({ call }: { call: Call }) {
+  const job = call.jobs?.[0];
+  const cls =
+    "rounded-full text-xs font-medium px-2.5 py-0.5 whitespace-nowrap";
+  if (call.spam) {
+    return <span className={`${cls} bg-rose-100 text-rose-700`}>Spam</span>;
+  }
   if (job?.qualified === false) {
-    return (
-      <span className="rounded-full bg-amber-100 text-amber-700 text-xs font-medium px-2.5 py-0.5 whitespace-nowrap">
-        Out of scope
-      </span>
-    );
+    return <span className={`${cls} bg-amber-100 text-amber-700`}>Out of scope</span>;
   }
   if (job?.qualified === true) {
-    return (
-      <span className="rounded-full bg-green-100 text-green-700 text-xs font-medium px-2.5 py-0.5 whitespace-nowrap">
-        Qualified
-      </span>
-    );
+    return <span className={`${cls} bg-emerald-100 text-emerald-700`}>Qualified</span>;
   }
+  return <span className={`${cls} bg-indigo-100 text-indigo-700`}>New</span>;
+}
+
+function DeliveryPills({ job }: { job?: Job }) {
+  if (!job) return null;
+  const pill = "rounded-full px-2 py-0.5 text-[11px] font-medium";
   return (
-    <span className="rounded-full bg-blue-100 text-blue-700 text-xs font-medium px-2.5 py-0.5 whitespace-nowrap">
-      New
+    <span className="flex items-center gap-1.5">
+      <span
+        className={`${pill} ${
+          job.dispatched_sms
+            ? "bg-emerald-50 text-emerald-700"
+            : "bg-neutral-100 text-neutral-500"
+        }`}
+      >
+        {job.dispatched_sms ? "SMS ✓" : "SMS —"}
+      </span>
+      {job.dispatched_json && (
+        <span className={`${pill} bg-emerald-50 text-emerald-700`}>CRM ✓</span>
+      )}
     </span>
   );
 }
@@ -145,13 +185,7 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function CallCard({
-  call,
-  businessName,
-}: {
-  call: Call;
-  businessName: string;
-}) {
+function CallCard({ call, businessName }: { call: Call; businessName: string }) {
   const j = call.jobs?.[0];
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(buildSms(businessName, call));
@@ -163,6 +197,9 @@ function CallCard({
   const durCost = `${fmtDuration(call.duration_sec)}${
     call.cost != null ? ` · $${call.cost.toFixed(2)}` : ""
   }`;
+  const detailEntries = j?.details
+    ? Object.entries(j.details).filter(([, v]) => v != null && v !== "")
+    : [];
 
   async function copy() {
     try {
@@ -175,10 +212,10 @@ function CallCard({
   }
 
   return (
-    <li className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+    <li className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
       {/* ============ DESKTOP: list row ============ */}
       <div className="hidden md:grid grid-cols-[auto_1.4fr_1.2fr_auto_auto_auto] items-center gap-4 px-4 py-3">
-        <Avatar name={name} />
+        <Avatar name={name} spam={!!call.spam} />
 
         <div className="min-w-0">
           <div className="font-medium truncate">{name}</div>
@@ -188,30 +225,33 @@ function CallCard({
         </div>
 
         <div className="min-w-0">
-          <div className="font-medium truncate">{service || "—"}</div>
+          <div className="font-medium truncate">{service || (call.spam ? "—" : "—")}</div>
           <div className="text-sm text-neutral-500 truncate">
             {j?.address || property || "—"}
           </div>
         </div>
 
-        <div className="text-right text-sm text-neutral-500 whitespace-nowrap">
-          <div>{fmtTime(call.created_at)}</div>
+        <div
+          className="text-right text-sm text-neutral-500 whitespace-nowrap"
+          title={fmtTime(call.created_at)}
+        >
+          <div>{relTime(call.created_at)}</div>
           <div className="tabular-nums">{durCost}</div>
         </div>
 
-        <StatusBadge job={j} />
+        <StatusBadge call={call} />
 
         <div className="flex items-center gap-2 justify-end">
           <button
             onClick={() => setOpen((o) => !o)}
-            className="rounded-md bg-black text-white text-sm px-3 py-1.5 whitespace-nowrap"
+            className="rounded-lg bg-black text-white text-sm px-3 py-1.5 whitespace-nowrap"
           >
             {open ? "Close" : "Forward"}
           </button>
           <button
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Collapse" : "Expand"}
-            className="p-1.5 rounded-md text-neutral-500 hover:bg-neutral-100"
+            className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100"
           >
             <Chevron open={open} />
           </button>
@@ -222,15 +262,18 @@ function CallCard({
       <div className="md:hidden p-4 space-y-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
-            <Avatar name={name} />
+            <Avatar name={name} spam={!!call.spam} />
             <div className="min-w-0">
               <div className="font-medium truncate">{name}</div>
-              <div className="text-sm text-neutral-500 truncate">
-                {call.from_number || "—"} · {fmtTime(call.created_at)}
+              <div
+                className="text-sm text-neutral-500 truncate"
+                title={fmtTime(call.created_at)}
+              >
+                {call.from_number || "—"} · {relTime(call.created_at)}
               </div>
             </div>
           </div>
-          <StatusBadge job={j} />
+          <StatusBadge call={call} />
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -252,12 +295,10 @@ function CallCard({
         </div>
 
         <div className="flex items-center justify-between">
-          <span className="text-xs text-neutral-500">
-            {j?.dispatched_sms ? "✓ SMS sent" : "Not texted"}
-          </span>
+          <DeliveryPills job={j} />
           <button
             onClick={() => setOpen((o) => !o)}
-            className="rounded-md bg-black text-white text-sm px-3 py-1.5"
+            className="rounded-lg bg-black text-white text-sm px-3 py-1.5"
           >
             {open ? "Close" : "Forward as text"}
           </button>
@@ -267,7 +308,6 @@ function CallCard({
       {/* ============ SHARED expandable detail ============ */}
       {open && (
         <div className="border-t border-neutral-200 bg-neutral-50 p-4 space-y-4">
-          {/* Full field grid — desktop only (the mobile card already shows these) */}
           <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
             <Field label="Caller ID" value={call.from_number} />
             {j?.phone && !samePhone(j.phone, call.from_number) && (
@@ -290,15 +330,29 @@ function CallCard({
             )}
           </div>
 
+          {/* Extra details the agent collected */}
+          {detailEntries.length > 0 && (
+            <div className="rounded-lg border border-neutral-200 bg-white p-3">
+              <div className="text-xs uppercase tracking-wide text-neutral-400 mb-2">
+                Collected details
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                {detailEntries.map(([k, v]) => (
+                  <Field key={k} label={titleize(k)} value={String(v)} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* LEFT — status, recording, transcript */}
             <div className="space-y-3">
-              <div className="flex items-center gap-4 text-xs text-neutral-500">
+              <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
                 <span>
                   {call.status}
                   {call.ended_reason ? ` · ${call.ended_reason}` : ""}
                 </span>
-                {j?.dispatched_sms && <span>✓ SMS sent</span>}
+                <DeliveryPills job={j} />
               </div>
 
               {call.recording_url && (
@@ -320,14 +374,14 @@ function CallCard({
             </div>
 
             {/* RIGHT — SMS to forward */}
-            <div className="rounded-md border border-neutral-200 bg-white p-3 space-y-2">
+            <div className="rounded-lg border border-neutral-200 bg-white p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-neutral-700">
                   Forward as text
                 </span>
                 <button
                   onClick={copy}
-                  className="rounded bg-black text-white text-sm px-3 py-1.5"
+                  className="rounded-lg bg-black text-white text-sm px-3 py-1.5"
                 >
                   {copied ? "Copied!" : "Copy"}
                 </button>
@@ -335,7 +389,7 @@ function CallCard({
               <textarea
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                className="w-full min-h-44 rounded border border-neutral-300 bg-white px-3 py-2 text-sm font-mono whitespace-pre"
+                className="w-full min-h-44 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-mono whitespace-pre"
               />
             </div>
           </div>
@@ -345,6 +399,75 @@ function CallCard({
   );
 }
 
+function Kpi({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string | number;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white shadow-sm p-4">
+      <div className="text-xs uppercase tracking-wide text-neutral-400">
+        {label}
+      </div>
+      <div className={`mt-1 text-2xl font-bold ${accent ?? "text-neutral-800"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function toCsv(calls: Call[]): string {
+  const esc = (v: unknown) => {
+    const s = v == null ? "" : String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const header = [
+    "When",
+    "Caller",
+    "Callback",
+    "Name",
+    "Service",
+    "Property",
+    "Address",
+    "Duration (s)",
+    "Cost",
+    "Status",
+    "Spam",
+    "Notes",
+  ];
+  const rows = calls.map((c) => {
+    const j = c.jobs?.[0];
+    const status = c.spam
+      ? "Spam"
+      : j?.qualified === false
+      ? "Out of scope"
+      : j
+      ? "Qualified"
+      : "New";
+    return [
+      new Date(c.created_at).toISOString(),
+      c.from_number ?? "",
+      callbackOf(c) ?? "",
+      j?.customer_name ?? "",
+      titleize(j?.service_type),
+      titleize(j?.property_type),
+      j?.address ?? "",
+      c.duration_sec ?? "",
+      c.cost ?? "",
+      status,
+      c.spam ? "yes" : "",
+      j?.notes ?? "",
+    ]
+      .map(esc)
+      .join(",");
+  });
+  return [header.join(","), ...rows].join("\n");
+}
+
 export default function CallsView({
   calls,
   businessName,
@@ -352,19 +475,162 @@ export default function CallsView({
   calls: Call[];
   businessName: string;
 }) {
-  if (calls.length === 0) {
-    return (
-      <p className="text-neutral-500">
-        No calls yet. When your Vapi number takes a call, it will appear here.
-      </p>
+  const [q, setQ] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+
+  const kpis = useMemo(() => {
+    const uniq = new Set(
+      calls
+        .map((c) => (c.from_number || "").replace(/\D/g, "").slice(-10))
+        .filter(Boolean)
     );
+    const withDur = calls.filter((c) => c.duration_sec);
+    const avg = withDur.length
+      ? Math.round(
+          withDur.reduce((t, c) => t + (c.duration_sec ?? 0), 0) / withDur.length
+        )
+      : 0;
+    return {
+      total: calls.length,
+      jobs: calls.filter((c) => !c.spam && c.jobs?.length > 0).length,
+      unique: uniq.size,
+      avg: fmtDuration(avg || null),
+      spam: calls.filter((c) => c.spam).length,
+    };
+  }, [calls]);
+
+  const counts = useMemo(() => {
+    const c = { all: calls.length, qualified: 0, out_of_scope: 0, spam: 0, not_texted: 0 };
+    for (const call of calls) {
+      const j = call.jobs?.[0];
+      if (call.spam) c.spam++;
+      else if (j?.qualified === false) c.out_of_scope++;
+      else if (j) c.qualified++;
+      if (j && !j.dispatched_sms && !call.spam) c.not_texted++;
+    }
+    return c;
+  }, [calls]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return calls.filter((call) => {
+      const j = call.jobs?.[0];
+      // filter
+      if (filter === "qualified" && !(!call.spam && j && j.qualified !== false))
+        return false;
+      if (filter === "out_of_scope" && !(j && j.qualified === false)) return false;
+      if (filter === "spam" && !call.spam) return false;
+      if (filter === "not_texted" && !(j && !j.dispatched_sms && !call.spam))
+        return false;
+      // search
+      if (!needle) return true;
+      const hay = [
+        j?.customer_name,
+        call.from_number,
+        j?.phone,
+        titleize(j?.service_type),
+        titleize(j?.property_type),
+        j?.address,
+        j?.notes,
+        fmtTime(call.created_at),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(needle);
+    });
+  }, [calls, q, filter]);
+
+  function exportCsv() {
+    const blob = new Blob([toCsv(filtered)], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "calls.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
+  const chips: { key: Filter; label: string; count: number }[] = [
+    { key: "all", label: "All", count: counts.all },
+    { key: "qualified", label: "Qualified", count: counts.qualified },
+    { key: "out_of_scope", label: "Out of scope", count: counts.out_of_scope },
+    { key: "not_texted", label: "Not texted", count: counts.not_texted },
+    { key: "spam", label: "Spam", count: counts.spam },
+  ];
+
   return (
-    <ul className="space-y-3">
-      {calls.map((call) => (
-        <CallCard key={call.id} call={call} businessName={businessName} />
-      ))}
-    </ul>
+    <div className="space-y-5">
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <Kpi label="Calls" value={kpis.total} />
+        <Kpi label="Jobs captured" value={kpis.jobs} accent="text-emerald-600" />
+        <Kpi label="Unique callers" value={kpis.unique} />
+        <Kpi label="Avg. duration" value={kpis.avg} />
+        <Kpi label="Spam" value={kpis.spam} accent="text-rose-600" />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[220px]">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name, phone, service, address, notes…"
+            className="w-full rounded-lg border border-neutral-300 bg-white pl-3 pr-8 py-2 text-sm"
+          />
+          {q && (
+            <button
+              onClick={() => setQ("")}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700"
+            >
+              ×
+            </button>
+          )}
+        </div>
+        <button
+          onClick={exportCsv}
+          className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
+        >
+          Export CSV
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {chips.map((c) => (
+          <button
+            key={c.key}
+            onClick={() => setFilter(c.key)}
+            className={`rounded-full px-3 py-1 text-sm border transition-colors ${
+              filter === c.key
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-neutral-600 border-neutral-300 hover:bg-neutral-100"
+            }`}
+          >
+            {c.label}
+            <span className={filter === c.key ? "opacity-80" : "text-neutral-400"}>
+              {" "}
+              {c.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* List */}
+      {calls.length === 0 ? (
+        <p className="text-neutral-500">
+          No calls yet. When your Vapi number takes a call, it will appear here.
+        </p>
+      ) : filtered.length === 0 ? (
+        <p className="text-neutral-500">No calls match your search or filter.</p>
+      ) : (
+        <ul className="space-y-3">
+          {filtered.map((call) => (
+            <CallCard key={call.id} call={call} businessName={businessName} />
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }

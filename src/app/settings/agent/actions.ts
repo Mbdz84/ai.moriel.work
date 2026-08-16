@@ -4,14 +4,21 @@ import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { getActiveBusiness, isAdmin } from "@/lib/tenant";
 import { updateVapiAssistant } from "@/lib/vapi";
+import {
+  composeSystemPrompt,
+  renderGreeting,
+  type Faq,
+  type CollectField,
+} from "@/lib/agent-prompt";
+import type { BusinessHours } from "@/lib/hours";
 
-// Builds the full Vapi system prompt from the structured question fields.
-function composePrompt(persona: string, ask: string, dont: string): string {
-  const parts: string[] = [];
-  if (persona.trim()) parts.push(persona.trim());
-  if (ask.trim()) parts.push(`# WHAT TO ASK / COLLECT\n${ask.trim()}`);
-  if (dont.trim()) parts.push(`# WHAT WE DON'T DO\n${dont.trim()}`);
-  return parts.join("\n\n");
+function parseJson<T>(raw: FormDataEntryValue | null, fallback: T): T {
+  if (typeof raw !== "string" || !raw.trim()) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export async function saveAgent(formData: FormData) {
@@ -29,19 +36,46 @@ export async function saveAgent(formData: FormData) {
   const str = (k: string) => String(formData.get(k) ?? "").trim();
 
   const assistantId = str("vapi_assistant_id");
+  const displayName = str("display_name");
   const greeting = str("greeting");
   const persona = str("persona");
   const ask = str("ask_questions");
   const dont = str("out_of_scope");
+  const spamHandling = str("spam_handling");
+  const timezone = str("timezone") || "America/Chicago";
+  const afterHours = str("after_hours_prompt");
+  const hoursEnabled = formData.get("hours_enabled") === "on";
+  const voiceId = str("voice_id");
+  const voiceProvider = str("voice_provider") || "11labs";
+
+  const businessHours = parseJson<BusinessHours>(
+    formData.get("business_hours"),
+    {}
+  );
+  const faqs = parseJson<Faq[]>(formData.get("faqs"), []);
+  const collectFields = parseJson<CollectField[]>(
+    formData.get("collect_fields"),
+    []
+  );
 
   await supabase
     .from("agents")
     .update({
       vapi_assistant_id: assistantId || null,
+      display_name: displayName || null,
       greeting,
       persona,
       ask_questions: ask,
       out_of_scope: dont,
+      spam_handling: spamHandling,
+      timezone,
+      hours_enabled: hoursEnabled,
+      business_hours: businessHours,
+      after_hours_prompt: afterHours,
+      faqs,
+      collect_fields: collectFields,
+      voice_id: voiceId,
+      voice_provider: voiceProvider,
       updated_at: new Date().toISOString(),
     })
     .eq("business_id", businessId);
@@ -50,9 +84,24 @@ export async function saveAgent(formData: FormData) {
   if (assistantId && process.env.VAPI_API_KEY) {
     try {
       await updateVapiAssistant(assistantId, {
-        firstMessage: greeting,
-        systemPrompt: composePrompt(persona, ask, dont),
+        firstMessage: renderGreeting(greeting, {
+          business: active?.name ?? "",
+          agent: displayName,
+        }),
+        systemPrompt: composeSystemPrompt({
+          persona,
+          ask_questions: ask,
+          collect_fields: collectFields,
+          faqs,
+          out_of_scope: dont,
+          spam_handling: spamHandling,
+          hours_enabled: hoursEnabled,
+          business_hours: businessHours,
+          after_hours_prompt: afterHours,
+          timezone,
+        }),
         knowledgeBase: "",
+        voice: voiceId ? { provider: voiceProvider, voiceId } : null,
       });
       sync = "ok";
     } catch (e) {

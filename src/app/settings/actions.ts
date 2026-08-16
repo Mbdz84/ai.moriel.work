@@ -15,8 +15,7 @@ async function requireAdminBusiness() {
   return { supabase, businessId };
 }
 
-// Dispatch settings (SMS recipients + JSON push). Multiple SMS numbers
-// are joined into a comma-separated string.
+// Dispatch settings: team SMS + JSON push + caller SMS + email + spam notice.
 export async function saveSettings(formData: FormData) {
   const { supabase, businessId } = await requireAdminBusiness();
   const str = (k: string) => String(formData.get(k) ?? "").trim();
@@ -33,6 +32,13 @@ export async function saveSettings(formData: FormData) {
       sms_to: numbers.join(", "),
       json_enabled: formData.get("json_enabled") === "on",
       json_url: str("json_url"),
+      caller_sms_enabled: formData.get("caller_sms_enabled") === "on",
+      caller_link: str("caller_link"),
+      caller_link_label: str("caller_link_label"),
+      caller_sms_template: str("caller_sms_template"),
+      email_enabled: formData.get("email_enabled") === "on",
+      email_to: str("email_to"),
+      notify_spam: formData.get("notify_spam") === "on",
       updated_at: new Date().toISOString(),
     })
     .eq("business_id", businessId);

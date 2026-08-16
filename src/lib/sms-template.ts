@@ -5,6 +5,7 @@
 
 export const SMS_TOKENS = [
   "business",
+  "agent",
   "name",
   "phone",
   "caller_id",
@@ -21,6 +22,7 @@ export type SmsToken = (typeof SMS_TOKENS)[number];
 // Human-readable hint for each token, shown in the settings editor.
 export const SMS_TOKEN_HELP: Record<SmsToken, string> = {
   business: "your company name",
+  agent: "your AI agent's display name",
   name: "caller's name",
   phone: "callback number (falls back to caller ID)",
   caller_id: "the number the caller dialed from",
@@ -42,6 +44,30 @@ export const DEFAULT_SMS_TEMPLATE = [
   "{flag}",
 ].join("\n");
 
+// ---- Caller SMS (sent to the CALLER after the call, with a link) ----
+export const CALLER_SMS_TOKENS = [
+  "business",
+  "agent",
+  "name",
+  "link",
+  "link_label",
+] as const;
+
+export type CallerSmsToken = (typeof CALLER_SMS_TOKENS)[number];
+
+export const CALLER_SMS_TOKEN_HELP: Record<CallerSmsToken, string> = {
+  business: "your company name",
+  agent: "your AI agent's display name",
+  name: "caller's name",
+  link: "the link URL you configured",
+  link_label: "the label for that link",
+};
+
+export const DEFAULT_CALLER_SMS_TEMPLATE = [
+  "Thanks for calling {business}! Here's the link you asked about:",
+  "{link_label}: {link}",
+].join("\n");
+
 // snake_case / lower → "Title Case" for display in the text.
 export function titleize(s: string | null | undefined): string {
   if (!s) return "";
@@ -50,7 +76,7 @@ export function titleize(s: string | null | undefined): string {
 
 export function renderSmsTemplate(
   template: string,
-  values: Partial<Record<SmsToken, string>>
+  values: Record<string, string | undefined>
 ): string {
   const tokenRe = /\{(\w+)\}/g;
   const lines = (template || "").split("\n");
@@ -61,7 +87,7 @@ export function renderSmsTemplate(
     let anyFilled = false;
     const rendered = line.replace(tokenRe, (_m, key: string) => {
       hadToken = true;
-      const v = (values as Record<string, string>)[key] ?? "";
+      const v = values[key] ?? "";
       if (v) anyFilled = true;
       return v;
     });

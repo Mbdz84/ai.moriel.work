@@ -64,12 +64,12 @@ export default async function UsagePage({
   const cost = rows.reduce((t, r) => t + (r.cost ?? 0), 0);
   const totalSec = rows.reduce((t, r) => t + (r.duration_sec ?? 0), 0);
 
-  const card = "rounded-lg border border-neutral-200 bg-white p-4";
+  const card = "rounded-xl border border-neutral-200 bg-white shadow-sm p-4";
 
   return (
     <main className="mx-auto w-full max-w-[1100px] p-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Usage</h1>
+        <h1 className="text-2xl font-bold text-neutral-800">Usage</h1>
         <SettingsNav active="usage" admin={true} />
       </div>
 
@@ -87,19 +87,19 @@ export default async function UsagePage({
           <div className="text-xs uppercase tracking-wide text-neutral-400">
             Calls
           </div>
-          <div className="mt-1 text-2xl font-bold">{calls}</div>
+          <div className="mt-1 text-2xl font-bold text-neutral-800">{calls}</div>
         </div>
         <div className={card}>
           <div className="text-xs uppercase tracking-wide text-neutral-400">
             Cost
           </div>
-          <div className="mt-1 text-2xl font-bold">{usd(cost)}</div>
+          <div className="mt-1 text-2xl font-bold text-indigo-600">{usd(cost)}</div>
         </div>
         <div className={card}>
           <div className="text-xs uppercase tracking-wide text-neutral-400">
             Talk time
           </div>
-          <div className="mt-1 text-2xl font-bold">
+          <div className="mt-1 text-2xl font-bold text-neutral-800">
             {Math.round(totalSec / 60)}m
           </div>
         </div>
@@ -110,37 +110,37 @@ export default async function UsagePage({
       </p>
 
       <section className="space-y-2">
-        <h2 className="font-semibold">Calls in range</h2>
-        <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[480px]">
-          <thead>
-            <tr className="text-left text-neutral-400 border-b border-neutral-200">
-              <th className="py-2 font-medium">When</th>
-              <th className="py-2 font-medium">Caller</th>
-              <th className="py-2 font-medium">Duration</th>
-              <th className="py-2 font-medium text-right">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.slice(0, 50).map((r, i) => (
-              <tr key={i} className="border-b border-neutral-100">
-                <td className="py-2">{fmtTime(r.created_at)}</td>
-                <td className="py-2">{r.from_number || "—"}</td>
-                <td className="py-2">{mins(r.duration_sec)}</td>
-                <td className="py-2 text-right">
-                  {r.cost != null ? usd(r.cost) : "—"}
-                </td>
+        <h2 className="font-semibold text-neutral-800">Calls in range</h2>
+        <div className="overflow-x-auto rounded-xl border border-neutral-200 bg-white shadow-sm">
+          <table className="w-full text-sm min-w-[480px]">
+            <thead>
+              <tr className="text-left text-neutral-400 border-b border-neutral-200">
+                <th className="py-2 px-4 font-medium">When</th>
+                <th className="py-2 px-4 font-medium">Caller</th>
+                <th className="py-2 px-4 font-medium">Duration</th>
+                <th className="py-2 px-4 font-medium text-right">Cost</th>
               </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-4 text-neutral-500">
-                  No calls in this range.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.slice(0, 50).map((r, i) => (
+                <tr key={i} className="border-b border-neutral-100 last:border-0">
+                  <td className="py-2 px-4">{fmtTime(r.created_at)}</td>
+                  <td className="py-2 px-4">{r.from_number || "—"}</td>
+                  <td className="py-2 px-4">{mins(r.duration_sec)}</td>
+                  <td className="py-2 px-4 text-right">
+                    {r.cost != null ? usd(r.cost) : "—"}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-4 px-4 text-neutral-500">
+                    No calls in this range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
     </main>

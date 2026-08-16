@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Membership } from "@/lib/tenant";
@@ -27,22 +27,33 @@ export default function NavBar({
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
-  // Close the mobile drawer on navigation.
-  useEffect(() => setOpen(false), [pathname]);
+  const isActive = (href: string) =>
+    href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 
-  const links = (
+  const linkCls = (href: string) =>
+    `text-sm font-medium transition-colors ${
+      isActive(href)
+        ? "text-indigo-600"
+        : "text-neutral-600 hover:text-neutral-900"
+    }`;
+
+  // Close the mobile drawer on navigation (handled on click — no effect needed).
+  const close = () => setOpen(false);
+
+  const navLinks = (onNav?: () => void) => (
     <>
-      <Link href="/dashboard" className="text-neutral-600 hover:text-black">
+      <Link href="/dashboard" className={linkCls("/dashboard")} onClick={onNav}>
         Dashboard
       </Link>
       {admin ? (
-        <Link href="/settings" className="text-neutral-600 hover:text-black">
+        <Link href="/settings" className={linkCls("/settings")} onClick={onNav}>
           Settings
         </Link>
       ) : (
         <Link
           href="/settings/account"
-          className="text-neutral-600 hover:text-black"
+          className={linkCls("/settings/account")}
+          onClick={onNav}
         >
           Account
         </Link>
@@ -50,37 +61,43 @@ export default function NavBar({
     </>
   );
 
-  const controls = (
-    <>
-      {active?.role === "super" && (
-        <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
-          SUPER
-        </span>
-      )}
-      {active && (
-        <CompanySwitcher memberships={memberships} activeId={active.business_id} />
-      )}
-      <ThemeToggle />
-      <LogoutButton />
-    </>
+  const brand = (
+    <span className="flex items-center gap-2 font-bold text-neutral-900">
+      <span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white text-sm">
+        V
+      </span>
+      Voice-AI
+    </span>
   );
 
   return (
-    <header className="border-b border-neutral-200 bg-white">
+    <header className="border-b border-neutral-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
       <nav className="mx-auto max-w-[1100px] flex items-center justify-between px-6 h-14">
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="font-bold">
-            Voice-AI
-          </Link>
-          <div className="hidden md:flex items-center gap-4 text-sm">{links}</div>
+          <Link href="/dashboard">{brand}</Link>
+          <div className="hidden md:flex items-center gap-5">{navLinks()}</div>
         </div>
 
         {/* Desktop controls */}
-        <div className="hidden md:flex items-center gap-4 text-sm">{controls}</div>
+        <div className="hidden md:flex items-center gap-3 text-sm">
+          {active?.role === "super" && (
+            <span className="rounded-full bg-rose-600 text-white text-xs px-2 py-0.5">
+              SUPER
+            </span>
+          )}
+          {active && (
+            <CompanySwitcher
+              memberships={memberships}
+              activeId={active.business_id}
+            />
+          )}
+          <ThemeToggle />
+          <LogoutButton />
+        </div>
 
         {/* Mobile hamburger */}
         <button
-          className="md:hidden p-2 -mr-2"
+          className="md:hidden p-2 -mr-2 text-neutral-700"
           aria-label="Open menu"
           onClick={() => setOpen(true)}
         >
@@ -95,18 +112,11 @@ export default function NavBar({
       {/* Mobile drawer */}
       {open && (
         <div className="md:hidden fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setOpen(false)}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={close} />
           <div className="absolute left-0 top-0 h-full w-72 max-w-[80%] bg-white shadow-xl p-5 flex flex-col gap-5">
             <div className="flex items-center justify-between">
-              <span className="font-bold">Voice-AI</span>
-              <button
-                aria-label="Close menu"
-                onClick={() => setOpen(false)}
-                className="p-1"
-              >
+              {brand}
+              <button aria-label="Close menu" onClick={close} className="p-1 text-neutral-700">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="6" y1="6" x2="18" y2="18" />
                   <line x1="6" y1="18" x2="18" y2="6" />
@@ -122,7 +132,7 @@ export default function NavBar({
                 />
                 <div className="flex items-center gap-2">
                   {active.role === "super" && (
-                    <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
+                    <span className="rounded-full bg-rose-600 text-white text-xs px-2 py-0.5">
                       SUPER
                     </span>
                   )}
@@ -133,7 +143,7 @@ export default function NavBar({
               </div>
             )}
 
-            <div className="flex flex-col gap-3 text-base">{links}</div>
+            <div className="flex flex-col gap-3 text-base">{navLinks(close)}</div>
 
             <div className="mt-auto flex items-center gap-3">
               <ThemeToggle />

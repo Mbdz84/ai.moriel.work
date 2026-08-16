@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { dispatchJob, resolveCallbackPhone } from "@/lib/dispatch";
+import { dispatchJob, notifySpamCall, resolveCallbackPhone } from "@/lib/dispatch";
 import { fetchCallExtract } from "@/lib/vapi";
 import { validateAddress } from "@/lib/address";
 
@@ -15,6 +15,17 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 // NOTE: payload shape below is based on Vapi's documented format.
 // Probe a real call once and adjust field paths if needed.
 // ============================================================
+
+const KNOWN_JOB_KEYS = new Set([
+  "name",
+  "phone",
+  "address",
+  "property_type",
+  "service_type",
+  "vehicle",
+  "qualified",
+  "notes",
+]);
 
 export async function POST(req: NextRequest) {
   // 1) Verify the request came from Vapi (shared secret header).
@@ -50,10 +61,6 @@ export async function POST(req: NextRequest) {
   }
 
   // --- Extract the structured data the assistant collected. ---
-  // Vapi (2026 Structured Outputs) delivers results keyed by the output's UUID
-  // at message.artifact.structuredOutputs[<id>].result. We attached ONE output
-  // ("Locksmith Job"), so grab the first result. Falls back to the legacy
-  // message.analysis.structuredData path for older assistants.
   type JobData = {
     name?: string;
     phone?: string;
@@ -63,6 +70,7 @@ export async function POST(req: NextRequest) {
     vehicle?: string;
     qualified?: boolean;
     notes?: string;
+    [key: string]: unknown;
   };
   // Artifact can live at message.artifact or message.call.artifact.
   const artifact = message?.artifact ?? call?.artifact ?? {};
@@ -90,12 +98,30 @@ export async function POST(req: NextRequest) {
   }
 
   const endedReason = message?.endedReason ?? call?.endedReason ?? null;
+  const durationSec = message?.durationSeconds
+    ? Math.round(message.durationSeconds)
+    : null;
 
   // --- Normalize the spoken address via Google (optional, best-effort). ---
-  // Stores the clean single line; the SMS shows a two-line postal format.
   const validated = await validateAddress(data?.address);
   const dbAddress = validated ? validated.oneLine : data?.address ?? null;
   if (validated) data.address = validated.oneLine;
+
+  // Did the agent actually capture a usable job?
+  const hasData = Boolean(
+    data?.name ||
+      data?.phone ||
+      data?.address ||
+      data?.service_type ||
+      data?.property_type
+  );
+  const spam = !hasData;
+
+  // Any extra keys the agent collected beyond the known job fields.
+  const details: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data ?? {})) {
+    if (!KNOWN_JOB_KEYS.has(k) && v != null && v !== "") details[k] = v;
+  }
 
   // 2) Store the call.
   const { data: callRow, error: callErr } = await supabase
@@ -107,16 +133,11 @@ export async function POST(req: NextRequest) {
       to_number: toNumber,
       started_at: message?.startedAt ?? null,
       ended_at: message?.endedAt ?? null,
-      duration_sec: message?.durationSeconds
-        ? Math.round(message.durationSeconds)
-        : null,
+      duration_sec: durationSec,
       status: "completed",
       ended_reason: endedReason,
-      // Vapi reports the call cost (USD) in the end-of-call-report.
+      spam,
       cost: message?.cost ?? call?.cost ?? null,
-      // Recording + transcript live under message.artifact in end-of-call-report.
-      // Stored as a "has recording" marker + fallback; playback re-fetches a
-      // fresh URL from Vapi via /api/recording/[id] (URLs can expire).
       recording_url:
         artifact?.recordingUrl ??
         artifact?.stereoRecordingUrl ??
@@ -134,9 +155,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "db" }, { status: 500 });
   }
 
-  // 3) Store the job (only if the agent captured something usable).
-  //    Persist the resolved callback number so "use the same number" still
-  //    lands a real phone number, and the validated address.
+  const recordingUrl =
+    artifact?.recordingUrl ??
+    artifact?.stereoRecordingUrl ??
+    artifact?.recording?.stereoUrl ??
+    artifact?.recording?.mono?.combinedUrl ??
+    artifact?.recording?.url ??
+    null;
+  const transcript = artifact?.transcript ?? message?.transcript ?? null;
+
+  // 3) No usable job → treat as spam/no-intent. Optionally notify, then stop.
+  if (!hasData) {
+    await notifySpamCall(supabase, businessId, {
+      fromNumber: callerNumber,
+      durationSec,
+      endedReason,
+    });
+    return NextResponse.json({ ok: true, call_id: callRow.id, spam: true });
+  }
+
+  // 4) Store the job (with any extra collected details).
   const qualified = data?.qualified !== false;
   const { data: jobRow } = await supabase
     .from("jobs")
@@ -150,15 +188,23 @@ export async function POST(req: NextRequest) {
       service_type: data?.service_type ?? null,
       qualified,
       notes: data?.notes ?? null,
+      details: Object.keys(details).length ? details : {},
     })
     .select("id")
     .single();
 
-  // 4) Dispatch: SMS via Twilio + optional custom JSON push.
+  // 5) Dispatch: team SMS + JSON + caller SMS + email.
   //    Failures are logged inside dispatchJob and don't fail the webhook.
   if (jobRow?.id) {
     await dispatchJob(supabase, businessId, jobRow.id, data, callerNumber, {
       smsAddress: validated?.twoLine,
+      call: {
+        recordingUrl,
+        transcript,
+        durationSec,
+        endedReason,
+        fromNumber: callerNumber,
+      },
     });
   }
 

@@ -46,7 +46,7 @@ export default async function DashboardPage({
   const { data: calls } = await supabase
     .from("calls")
     .select(
-      "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, jobs(*)"
+      "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, spam, jobs(*)"
     )
     .eq("business_id", businessId)
     .gte("created_at", range.start.toISOString())
@@ -62,10 +62,10 @@ export default async function DashboardPage({
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Calls</h1>
+          <h1 className="text-2xl font-bold text-neutral-800">Calls</h1>
           {business && (
             <p className="text-sm text-neutral-500">
-              {business.name} · {rows.length} in range
+              {business.name} · live activity across your AI receptionist
             </p>
           )}
         </div>

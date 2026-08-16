@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* RingReady-style cool canvas + slate ink (light mode). */
+  --background: #f6f7fb;
+  --foreground: #0f172a;
 }
 
 @theme inline {
@@ -32,6 +33,26 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ============================================================
+   LIGHT BRAND PALETTE (RingReady-style: slate + indigo).
+   Reskins the utility classes the app already uses so the whole
+   app adopts the palette without editing every component. Each
+   class below also has a `.dark` override further down, which wins
+   by specificity in dark mode — so this block only affects light.
+   ============================================================ */
+.bg-black { background-color: #4f46e5; }        /* primary buttons -> indigo */
+.bg-neutral-50 { background-color: #f8fafc; }
+.bg-neutral-100 { background-color: #eef1f6; }
+.text-neutral-800 { color: #1e293b; }
+.text-neutral-700 { color: #334155; }
+.text-neutral-600 { color: #475569; }
+.text-neutral-500 { color: #64748b; }
+.text-neutral-400 { color: #94a3b8; }
+.border-neutral-200 { border-color: #e6e9f0; }
+.border-neutral-300 { border-color: #d3d9e6; }
+.divide-neutral-200 > * { border-color: #e6e9f0; }
+.divide-neutral-100 > * { border-color: #eef1f6; }
 
 /* Reskin the light utility classes we use so components adapt to dark mode
    without each needing dark: variants. */

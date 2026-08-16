@@ -52,10 +52,14 @@ export function splitSystemMessage(content: string): {
   };
 }
 
+export type VapiVoice = { provider: string; voiceId: string };
+
 export type AgentScript = {
   firstMessage: string;
   systemPrompt: string;
   knowledgeBase: string;
+  // Optional: set the assistant's voice. Omitted -> voice left unchanged.
+  voice?: VapiVoice | null;
 };
 
 type VapiMessage = { role?: string; content?: string };
@@ -83,8 +87,8 @@ export async function getVapiAssistant(
   return { firstMessage, systemPrompt, knowledgeBase };
 }
 
-// Push script + KB back to Vapi. GET first so we preserve the model
-// (provider/model) and any non-system messages.
+// Push script + KB (+ optional voice) back to Vapi. GET first so we preserve
+// the model (provider/model) and any non-system messages.
 export async function updateVapiAssistant(
   assistantId: string,
   script: AgentScript
@@ -121,7 +125,16 @@ export async function updateVapiAssistant(
     ],
   };
 
-  const body = { firstMessage: script.firstMessage, model };
+  const body: Record<string, unknown> = {
+    firstMessage: script.firstMessage,
+    model,
+  };
+  if (script.voice && script.voice.voiceId) {
+    body.voice = {
+      provider: script.voice.provider || "11labs",
+      voiceId: script.voice.voiceId,
+    };
+  }
 
   const patchRes = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
     method: "PATCH",
