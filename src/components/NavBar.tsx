@@ -115,31 +115,29 @@ export default function NavBar({
             </div>
 
             {active && (
-              <div className="flex items-center gap-2">
-                {active.role === "super" && (
-                  <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
-                    SUPER
-                  </span>
-                )}
-                <p className="text-sm text-neutral-500">
-                  {active.name} · {active.company_id}
-                </p>
+              <div className="flex flex-col gap-2">
+                <CompanySwitcher
+                  memberships={memberships}
+                  activeId={active.business_id}
+                />
+                <div className="flex items-center gap-2">
+                  {active.role === "super" && (
+                    <span className="rounded bg-red-600 text-white text-xs px-2 py-0.5">
+                      SUPER
+                    </span>
+                  )}
+                  <p className="text-sm text-neutral-500">
+                    {active.name} · {active.company_id}
+                  </p>
+                </div>
               </div>
             )}
 
             <div className="flex flex-col gap-3 text-base">{links}</div>
 
-            <div className="mt-auto flex flex-col gap-3">
-              {active && (
-                <CompanySwitcher
-                  memberships={memberships}
-                  activeId={active.business_id}
-                />
-              )}
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <LogoutButton />
-              </div>
+            <div className="mt-auto flex items-center gap-3">
+              <ThemeToggle />
+              <LogoutButton />
             </div>
           </div>
         </div>
