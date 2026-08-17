@@ -126,7 +126,7 @@ function Field({
         {check && value && (
           <span
             className="text-emerald-600 ml-1"
-            title="Address verified by Google"
+            title="Address is Google verified"
           >
             ✓
           </span>
@@ -263,7 +263,7 @@ function CallCard({
             {addrVerified && j?.address && (
               <span
                 className="text-emerald-600 ml-1"
-                title="Address verified by Google"
+                title="Address is Google verified"
               >
                 ✓
               </span>
