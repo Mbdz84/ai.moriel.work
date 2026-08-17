@@ -69,3 +69,23 @@ export async function saveTwilio(formData: FormData) {
   await supabase.from("credentials").upsert(update);
   redirect("/settings?saved=twilio");
 }
+
+// Manual only: clear the recording link on calls older than the selected age.
+// Keeps the call row, transcript, and job. Runs only when the admin clicks —
+// no schedule, no pg_cron.
+export async function purgeRecordingsNow(formData: FormData) {
+  const { supabase, businessId } = await requireAdminBusiness();
+  const days = parseInt(String(formData.get("older_than_days") ?? "90"), 10);
+  const clean = [30, 60, 90, 120].includes(days) ? days : 90;
+  const cutoff = new Date(Date.now() - clean * 86400000).toISOString();
+
+  const { data } = await supabase
+    .from("calls")
+    .update({ recording_url: null })
+    .eq("business_id", businessId)
+    .lt("created_at", cutoff)
+    .not("recording_url", "is", null)
+    .select("id");
+
+  redirect(`/settings?purged=${data?.length ?? 0}`);
+}

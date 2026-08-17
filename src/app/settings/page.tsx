@@ -5,14 +5,14 @@ import { getTwilioBalance, twilioConnected } from "@/lib/twilio";
 import SettingsNav from "@/components/SettingsNav";
 import TwilioCredentials from "@/components/TwilioCredentials";
 import SmsRecipients from "@/components/SmsRecipients";
-import { saveSettings } from "./actions";
+import { saveSettings, purgeRecordingsNow } from "./actions";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; purged?: string }>;
 }) {
-  const { saved } = await searchParams;
+  const { saved, purged } = await searchParams;
   const supabase = await createSupabaseServer();
 
   const {
@@ -37,6 +37,7 @@ export default async function SettingsPage({
     .select("*")
     .eq("business_id", businessId)
     .maybeSingle();
+
 
   // Compute masked values server-side — real secrets never reach the client.
   const sid = (cred?.twilio_account_sid as string | null) || "";
@@ -72,6 +73,11 @@ export default async function SettingsPage({
       {saved && (
         <p className="rounded bg-green-50 text-green-700 text-sm px-3 py-2">
           Saved.
+        </p>
+      )}
+      {purged !== undefined && (
+        <p className="rounded bg-green-50 text-green-700 text-sm px-3 py-2">
+          Removed recordings from {purged} call{purged === "1" ? "" : "s"}.
         </p>
       )}
 
@@ -220,6 +226,34 @@ export default async function SettingsPage({
         >
           Save settings
         </button>
+      </form>
+
+      {/* Delete old recordings — manual only */}
+      <form action={purgeRecordingsNow} className={section}>
+        <h2 className="font-semibold">Delete old recordings</h2>
+        <p className="text-xs text-neutral-500">
+          Removes the audio from calls older than the selected age. Transcripts
+          and job details are kept. This runs only when you click — nothing is
+          deleted automatically.
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            name="older_than_days"
+            defaultValue="90"
+            className="rounded border border-neutral-300 px-3 py-2 text-sm"
+          >
+            <option value="30">Older than 30 days</option>
+            <option value="60">Older than 60 days</option>
+            <option value="90">Older than 90 days</option>
+            <option value="120">Older than 120 days</option>
+          </select>
+          <button
+            type="submit"
+            className="rounded bg-black text-white px-4 py-2 text-sm"
+          >
+            Delete recordings now
+          </button>
+        </div>
       </form>
     </main>
   );
