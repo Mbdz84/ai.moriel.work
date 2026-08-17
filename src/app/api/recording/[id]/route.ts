@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
-// Streams a call recording by re-fetching a fresh URL from Vapi (recording
-// URLs can expire). RLS ensures the user can only access their own tenant's
-// call. Redirects to the current recording URL.
+// Streams a call recording by re-fetching a FRESH pre-signed URL from Vapi on
+// every play (Vapi's raw storage URLs are private and its pre-signed URLs
+// expire after ~30 min). RLS ensures the user can only reach their tenant's call.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -23,9 +23,9 @@ export async function GET(
     .maybeSingle();
   if (!call) return new NextResponse("not found", { status: 404 });
 
-  let url = (call.recording_url as string | null) ?? null;
+  let url: string | null = null;
 
-  // Prefer a fresh URL from Vapi.
+  // Always prefer a fresh pre-signed URL from Vapi (publicly playable, short-lived).
   if (call.vapi_call_id && process.env.VAPI_API_KEY) {
     try {
       const r = await fetch(`https://api.vapi.ai/call/${call.vapi_call_id}`, {
@@ -36,17 +36,21 @@ export async function GET(
         const c = await r.json();
         const a = c?.artifact ?? {};
         url =
+          a.presignedMonoUrl ??
+          a.presignedStereoUrl ??
+          a.recording?.mono?.combinedUrl ??
+          a.recording?.stereoUrl ??
           a.recordingUrl ??
           a.stereoRecordingUrl ??
-          a.recording?.stereoUrl ??
-          a.recording?.mono?.combinedUrl ??
-          a.recording?.url ??
-          url;
+          null;
       }
     } catch {
-      /* fall back to stored url */
+      /* fall through to the stored URL */
     }
   }
+
+  // Last resort: whatever we stored at call time (may be private/expired).
+  if (!url) url = (call.recording_url as string | null) ?? null;
 
   if (!url) return new NextResponse("no recording", { status: 404 });
   return NextResponse.redirect(url);

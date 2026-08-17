@@ -230,7 +230,7 @@ function CallCard({
   onToggle: () => void;
 }) {
   const j = call.jobs?.[0];
-  const [draft, setDraft] = useState(buildSms(businessName, call));
+  const sms = buildSms(businessName, call);
   const [copied, setCopied] = useState(false);
 
   const name = j?.customer_name || call.from_number || "Unknown caller";
@@ -254,7 +254,7 @@ function CallCard({
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(draft);
+      await navigator.clipboard.writeText(sms);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -431,9 +431,8 @@ function CallCard({
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* LEFT — status, recording, transcript */}
-            <div className="space-y-3">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-500">
                 <span>
                   {call.status}
@@ -441,44 +440,31 @@ function CallCard({
                 </span>
                 <DeliveryPills job={j} />
               </div>
-
-              {call.recording_url && (
-                <audio controls preload="none" className="w-full">
-                  <source src={`/api/recording/${call.id}`} />
-                </audio>
-              )}
-
-              {call.transcript && (
-                <details className="text-sm">
-                  <summary className="cursor-pointer text-neutral-500">
-                    Transcript
-                  </summary>
-                  <p className="mt-2 whitespace-pre-wrap text-neutral-700">
-                    {call.transcript}
-                  </p>
-                </details>
-              )}
+              <button
+                onClick={copy}
+                title={sms}
+                className="rounded-lg bg-black text-white text-sm px-3 py-1.5 whitespace-nowrap"
+              >
+                {copied ? "Copied!" : "Copy as SMS"}
+              </button>
             </div>
 
-            {/* RIGHT — SMS to forward */}
-            <div className="rounded-lg border border-neutral-200 bg-white p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-neutral-700">
-                  Forward as text
-                </span>
-                <button
-                  onClick={copy}
-                  className="rounded-lg bg-black text-white text-sm px-3 py-1.5"
-                >
-                  {copied ? "Copied!" : "Copy"}
-                </button>
-              </div>
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                className="w-full min-h-44 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-mono whitespace-pre"
-              />
-            </div>
+            {call.recording_url && (
+              <audio controls preload="none" className="w-full">
+                <source src={`/api/recording/${call.id}`} />
+              </audio>
+            )}
+
+            {call.transcript && (
+              <details className="text-sm">
+                <summary className="cursor-pointer text-neutral-500">
+                  Transcript
+                </summary>
+                <p className="mt-2 whitespace-pre-wrap text-neutral-700">
+                  {call.transcript}
+                </p>
+              </details>
+            )}
           </div>
         </div>
       )}
