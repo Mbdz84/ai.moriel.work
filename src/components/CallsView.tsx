@@ -32,7 +32,11 @@ export type Call = {
 type Filter = "all" | "qualified" | "out_of_scope" | "spam" | "not_texted";
 
 // Detail keys we never surface in the "Collected details" panel.
-const HIDDEN_DETAIL_KEYS = new Set(["urgency"]);
+const HIDDEN_DETAIL_KEYS = new Set([
+  "urgency",
+  "address_verified",
+  "address_validated",
+]);
 
 function titleize(s: string | null | undefined) {
   if (!s) return "";
@@ -106,16 +110,28 @@ function initials(name: string) {
 function Field({
   label,
   value,
+  check,
 }: {
   label: string;
   value: string | null | undefined;
+  check?: boolean;
 }) {
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-neutral-400">
         {label}
       </div>
-      <div className="text-neutral-800">{value || "—"}</div>
+      <div className="text-neutral-800">
+        {value || "—"}
+        {check && value && (
+          <span
+            className="text-emerald-600 ml-1"
+            title="Address verified by Google"
+          >
+            ✓
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -211,6 +227,8 @@ function CallCard({
         ([k, v]) => v != null && v !== "" && !HIDDEN_DETAIL_KEYS.has(k)
       )
     : [];
+  const addrVerified =
+    (j?.details as Record<string, unknown> | null)?.address_verified === true;
 
   async function copy() {
     try {
@@ -242,6 +260,14 @@ function CallCard({
           <div className="font-medium truncate">{service || "—"}</div>
           <div className="text-sm text-neutral-500 truncate">
             {j?.address || property || "—"}
+            {addrVerified && j?.address && (
+              <span
+                className="text-emerald-600 ml-1"
+                title="Address verified by Google"
+              >
+                ✓
+              </span>
+            )}
           </div>
         </div>
 
@@ -284,7 +310,7 @@ function CallCard({
           <Field label="Service" value={service} />
           <Field label="Property" value={property} />
           <div className="col-span-2">
-            <Field label="Address" value={j?.address} />
+            <Field label="Address" value={j?.address} check={addrVerified} />
           </div>
           <Field label="Duration" value={fmtDuration(call.duration_sec)} />
           <Field
@@ -326,7 +352,7 @@ function CallCard({
               value={call.cost != null ? `$${call.cost.toFixed(2)}` : null}
             />
             <div className="col-span-2 lg:col-span-3">
-              <Field label="Address" value={j?.address} />
+              <Field label="Address" value={j?.address} check={addrVerified} />
             </div>
             {j?.notes && (
               <div className="col-span-2 lg:col-span-3">

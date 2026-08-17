@@ -14,6 +14,9 @@ export type ValidatedAddress = {
   //   9707 Le Claire Ave
   //   Skokie, IL 60077
   twoLine: string;
+  // True only when Google is confident the address is real and complete
+  // (down to the building), with nothing guessed. Used for the dashboard ✓.
+  verified: boolean;
 };
 
 export async function validateAddress(
@@ -56,7 +59,16 @@ export async function validateAddress(
     // Build the one-line from the same parts so the ZIP is 5-digit here too.
     const oneLine = [street, cityLine].filter(Boolean).join(", ");
 
-    return { oneLine, twoLine };
+    // Confidence: only mark verified when Google confirms a complete address
+    // down to the building (PREMISE/SUB_PREMISE) with no unconfirmed parts.
+    const verdict = d?.result?.verdict ?? {};
+    const granularity = verdict.validationGranularity ?? "";
+    const verified =
+      verdict.addressComplete === true &&
+      verdict.hasUnconfirmedComponents !== true &&
+      (granularity === "PREMISE" || granularity === "SUB_PREMISE");
+
+    return { oneLine, twoLine, verified };
   } catch {
     return null;
   }

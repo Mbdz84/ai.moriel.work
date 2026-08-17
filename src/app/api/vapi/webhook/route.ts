@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
   for (const [k, v] of Object.entries(data ?? {})) {
     if (!KNOWN_JOB_KEYS.has(k) && v != null && v !== "") details[k] = v;
   }
+  // Flag whether Google confirmed the address (drives the dashboard ✓).
+  if (validated) details.address_verified = validated.verified;
 
   // 2) Store the call.
   const { data: callRow, error: callErr } = await supabase
