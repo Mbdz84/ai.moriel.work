@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     to_number: to,
     duration_sec: 0,
     status: "blocked",
-    ended_reason: "no keypress (spam gate)",
+    ended_reason: "Caller did not press 1 to be connected, likely a spam caller",
     spam: true,
   });
 

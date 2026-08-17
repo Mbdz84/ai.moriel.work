@@ -286,7 +286,9 @@ function CallCard({
 
         {/* Job — service, then address on two lines */}
         <div className="min-w-0">
-          <div className="font-medium truncate">{service || "—"}</div>
+          <div className="font-medium truncate">
+            {service || (call.spam ? "Blocked call" : "—")}
+          </div>
           {addr ? (
             <>
               <div className="text-sm text-neutral-500 truncate">
@@ -308,7 +310,7 @@ function CallCard({
             </>
           ) : (
             <div className="text-sm text-neutral-500 truncate">
-              {property || "—"}
+              {property || (call.spam ? call.ended_reason : "") || "—"}
             </div>
           )}
         </div>
