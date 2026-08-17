@@ -25,6 +25,9 @@ export default function NavBar({
   memberships: Membership[];
 }) {
   const [open, setOpen] = useState(false);
+  const [balances, setBalances] = useState<{ twilio: string | null } | null>(
+    null
+  );
   const pathname = usePathname();
 
   const isActive = (href: string) =>
@@ -37,8 +40,18 @@ export default function NavBar({
         : "text-neutral-600 hover:text-neutral-900"
     }`;
 
-  // Close the mobile drawer on navigation (handled on click — no effect needed).
   const close = () => setOpen(false);
+
+  // Open the drawer and lazily fetch the Twilio balance (admins only).
+  function openDrawer() {
+    setOpen(true);
+    if (admin && !balances) {
+      fetch("/api/balances")
+        .then((r) => r.json())
+        .then((d) => setBalances({ twilio: d?.twilio ?? null }))
+        .catch(() => setBalances({ twilio: null }));
+    }
+  }
 
   const navLinks = (onNav?: () => void) => (
     <>
@@ -99,7 +112,7 @@ export default function NavBar({
         <button
           className="md:hidden p-2 -mr-2 text-neutral-700"
           aria-label="Open menu"
-          onClick={() => setOpen(true)}
+          onClick={openDrawer}
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <line x1="3" y1="6" x2="21" y2="6" />
@@ -145,9 +158,22 @@ export default function NavBar({
 
             <div className="flex flex-col gap-3 text-base">{navLinks(close)}</div>
 
-            <div className="mt-auto flex items-center gap-3">
-              <ThemeToggle />
-              <LogoutButton />
+            {/* Bottom: balances (admin) + theme/logout */}
+            <div className="mt-auto space-y-3">
+              {admin && (
+                <div className="rounded-lg border border-neutral-200 p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-500">Twilio balance</span>
+                    <span className="font-medium">
+                      {balances ? balances.twilio ?? "—" : "…"}
+                    </span>
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <ThemeToggle />
+                <LogoutButton />
+              </div>
             </div>
           </div>
         </div>
