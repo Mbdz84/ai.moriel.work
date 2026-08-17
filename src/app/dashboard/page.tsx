@@ -46,7 +46,7 @@ export default async function DashboardPage({
   const { data: calls } = await supabase
     .from("calls")
     .select(
-      "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, spam, jobs(*)"
+      "id, from_number, duration_sec, cost, status, ended_reason, recording_url, transcript, created_at, spam, source, jobs(*)"
     )
     .eq("business_id", businessId)
     .gte("created_at", range.start.toISOString())

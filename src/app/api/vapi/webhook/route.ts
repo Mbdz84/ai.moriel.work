@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { dispatchJob, notifySpamCall, resolveCallbackPhone } from "@/lib/dispatch";
-import { fetchCallExtract } from "@/lib/vapi";
+import { fetchCallExtract, getVapiAssistantName } from "@/lib/vapi";
 import { validateAddress } from "@/lib/address";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -102,6 +102,23 @@ export async function POST(req: NextRequest) {
     ? Math.round(message.durationSeconds)
     : null;
 
+  // --- Source: which assistant/brand handled this call. Uses the configured
+  // label from the Sources settings, falling back to the assistant's name. ---
+  const assistantId: string | null =
+    call?.assistantId ?? message?.assistantId ?? null;
+  let source: string | null = null;
+  if (assistantId) {
+    const { data: src } = await supabase
+      .from("sources")
+      .select("label")
+      .eq("business_id", businessId)
+      .eq("assistant_id", assistantId)
+      .maybeSingle();
+    source =
+      (src?.label as string | null)?.trim() ||
+      (await getVapiAssistantName(assistantId));
+  }
+
   // --- Normalize the spoken address via Google (optional, best-effort). ---
   const validated = await validateAddress(data?.address);
   const dbAddress = validated ? validated.oneLine : data?.address ?? null;
@@ -139,6 +156,8 @@ export async function POST(req: NextRequest) {
       status: "completed",
       ended_reason: endedReason,
       spam,
+      assistant_id: assistantId,
+      source,
       cost: message?.cost ?? call?.cost ?? null,
       recording_url:
         artifact?.recordingUrl ??
@@ -206,6 +225,7 @@ export async function POST(req: NextRequest) {
         durationSec,
         endedReason,
         fromNumber: callerNumber,
+        source,
       },
     });
   }

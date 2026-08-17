@@ -148,3 +148,43 @@ export async function updateVapiAssistant(
   }
   return patchRes.json();
 }
+
+// Fetch a single assistant's display name (used to tag calls with a source).
+export async function getVapiAssistantName(
+  assistantId: string
+): Promise<string | null> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key || !assistantId) return null;
+  try {
+    const r = await fetch(`https://api.vapi.ai/assistant/${assistantId}`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (!r.ok) return null;
+    const a = await r.json();
+    return (a?.name as string | null) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// List the org's assistants (id + name) for the Sources settings page.
+export async function listVapiAssistants(): Promise<
+  { id: string; name: string }[]
+> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key) return [];
+  try {
+    const r = await fetch(`https://api.vapi.ai/assistant?limit=100`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (!r.ok) return [];
+    const list = await r.json();
+    return (Array.isArray(list) ? list : []).map(
+      (a: { id: string; name?: string }) => ({ id: a.id, name: a.name ?? a.id })
+    );
+  } catch {
+    return [];
+  }
+}

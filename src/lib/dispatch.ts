@@ -56,6 +56,7 @@ type DispatchOptions = {
     durationSec?: number | null;
     endedReason?: string | null;
     fromNumber?: string | null;
+    source?: string | null;
   };
 };
 
@@ -92,6 +93,7 @@ function buildJobMessage(
 ): string {
   return renderSmsTemplate(template, {
     business: businessName,
+    source: opts?.call?.source || businessName,
     agent: agentName,
     name: data.name ?? "",
     phone: resolveCallbackPhone(data.phone, callerNumber),

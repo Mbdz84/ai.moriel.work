@@ -4,6 +4,7 @@
 // tokens is dropped, so optional fields never leave a dangling label behind.
 
 export const SMS_TOKENS = [
+  "source",
   "business",
   "agent",
   "name",
@@ -21,6 +22,7 @@ export type SmsToken = (typeof SMS_TOKENS)[number];
 
 // Human-readable hint for each token, shown in the settings editor.
 export const SMS_TOKEN_HELP: Record<SmsToken, string> = {
+  source: "the source / brand of this call (falls back to your company name)",
   business: "your company name",
   agent: "your AI agent's display name",
   name: "caller's name",
@@ -35,8 +37,8 @@ export const SMS_TOKEN_HELP: Record<SmsToken, string> = {
 };
 
 export const DEFAULT_SMS_TEMPLATE = [
-  "New locksmith job",
-  "Company: {business}",
+  "{source}",
+  "New job",
   "Name: {name}",
   "Phone: {phone}",
   "Address: {address}",

@@ -26,6 +26,7 @@ export type Call = {
   transcript: string | null;
   created_at: string;
   spam: boolean | null;
+  source: string | null;
   jobs: Job[];
 };
 
@@ -105,7 +106,7 @@ function callbackOf(call: Call) {
 function buildSms(businessName: string, call: Call): string {
   const j = call.jobs?.[0];
   return [
-    businessName,
+    call.source || businessName,
     `Name: ${j?.customer_name || "—"}`,
     `Address: ${j?.address || "—"}`,
     `Phone: ${callbackOf(call) || "—"}`,
@@ -282,6 +283,13 @@ function CallCard({
               {secondNumber}
             </div>
           )}
+          {call.source && (
+            <div className="mt-0.5">
+              <span className="inline-block rounded bg-indigo-50 text-indigo-700 text-[11px] px-1.5 py-0.5 truncate max-w-full">
+                {call.source}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Job — service, then address on two lines */}
@@ -364,6 +372,11 @@ function CallCard({
           <div className="col-span-2">
             <Field label="Date / time" value={fmtDateTimeTz(call.created_at)} />
           </div>
+          {call.source && (
+            <div className="col-span-2">
+              <Field label="Source" value={call.source} />
+            </div>
+          )}
           <Field label="Service" value={service} />
           <Field label="Property" value={property} />
           <div className="col-span-2">
@@ -398,6 +411,7 @@ function CallCard({
         <div className="border-t border-neutral-200 bg-neutral-50 p-4 space-y-4">
           <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
             <Field label="Date / time" value={fmtDateTimeTz(call.created_at)} />
+            {call.source && <Field label="Source" value={call.source} />}
             <Field label="Caller ID" value={call.from_number} />
             {j?.phone && !samePhone(j.phone, call.from_number) && (
               <Field label="Callback #" value={j.phone} />

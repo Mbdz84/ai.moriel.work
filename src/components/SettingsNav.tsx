@@ -10,6 +10,7 @@ export default function SettingsNav({
     | "dispatch"
     | "sms"
     | "agent"
+    | "sources"
     | "company"
     | "usage"
     | "guides"
@@ -32,6 +33,9 @@ export default function SettingsNav({
           </Link>
           <Link href="/settings/agent" className={item("agent")}>
             AI Agent
+          </Link>
+          <Link href="/settings/sources" className={item("sources")}>
+            Sources
           </Link>
           <Link href="/settings/company" className={item("company")}>
             Company
