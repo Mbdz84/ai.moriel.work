@@ -225,7 +225,10 @@ function CallCard({
   return (
     <li className="rounded-xl border border-neutral-200 bg-white shadow-sm overflow-hidden">
       {/* ============ DESKTOP: list row ============ */}
-      <div className="hidden md:grid grid-cols-[auto_1.4fr_1.2fr_auto_auto_auto] items-center gap-4 px-4 py-3">
+      <div
+        onClick={onToggle}
+        className="hidden md:grid grid-cols-[auto_1.4fr_1.2fr_auto_auto_auto] items-center gap-4 px-4 py-3 cursor-pointer hover:bg-neutral-50"
+      >
         <Avatar name={name} spam={!!call.spam} />
 
         <div className="min-w-0">
@@ -252,19 +255,15 @@ function CallCard({
 
         <StatusBadge call={call} />
 
-        <div className="flex items-center justify-end">
-          <button
-            onClick={onToggle}
-            aria-label={open ? "Collapse" : "Expand"}
-            className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100"
-          >
+        <div className="flex items-center justify-end text-neutral-500">
+          <span className="p-1.5">
             <Chevron open={open} />
-          </button>
+          </span>
         </div>
       </div>
 
       {/* ============ MOBILE: card ============ */}
-      <div className="md:hidden p-4 space-y-3">
+      <div onClick={onToggle} className="md:hidden p-4 space-y-3 cursor-pointer">
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <Avatar name={name} spam={!!call.spam} />
@@ -301,13 +300,10 @@ function CallCard({
 
         <div className="flex items-center justify-between">
           <DeliveryPills job={j} />
-          <button
-            onClick={onToggle}
-            className="flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900"
-          >
+          <span className="flex items-center gap-1 text-sm text-neutral-600">
             {open ? "Hide" : "Details"}
             <Chevron open={open} />
-          </button>
+          </span>
         </div>
       </div>
 
