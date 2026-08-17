@@ -31,6 +31,9 @@ export type Call = {
 
 type Filter = "all" | "qualified" | "out_of_scope" | "spam" | "not_texted";
 
+// Detail keys we never surface in the "Collected details" panel.
+const HIDDEN_DETAIL_KEYS = new Set(["urgency"]);
+
 function titleize(s: string | null | undefined) {
   if (!s) return "";
   return s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -60,7 +63,6 @@ function fmtTime(iso: string) {
   });
 }
 
-// "2h", "3d" relative label; full timestamp on hover.
 function relTime(iso: string) {
   const then = new Date(iso).getTime();
   const diff = Date.now() - then;
@@ -122,9 +124,7 @@ function Avatar({ name, spam }: { name: string; spam?: boolean }) {
   return (
     <div
       className={`flex-none w-9 h-9 rounded-lg grid place-items-center text-sm font-semibold ${
-        spam
-          ? "bg-rose-100 text-rose-600"
-          : "bg-indigo-50 text-indigo-600"
+        spam ? "bg-rose-100 text-rose-600" : "bg-indigo-50 text-indigo-600"
       }`}
     >
       {spam ? "!" : initials(name)}
@@ -185,9 +185,18 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-function CallCard({ call, businessName }: { call: Call; businessName: string }) {
+function CallCard({
+  call,
+  businessName,
+  open,
+  onToggle,
+}: {
+  call: Call;
+  businessName: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const j = call.jobs?.[0];
-  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(buildSms(businessName, call));
   const [copied, setCopied] = useState(false);
 
@@ -198,7 +207,9 @@ function CallCard({ call, businessName }: { call: Call; businessName: string }) 
     call.cost != null ? ` · $${call.cost.toFixed(2)}` : ""
   }`;
   const detailEntries = j?.details
-    ? Object.entries(j.details).filter(([, v]) => v != null && v !== "")
+    ? Object.entries(j.details).filter(
+        ([k, v]) => v != null && v !== "" && !HIDDEN_DETAIL_KEYS.has(k)
+      )
     : [];
 
   async function copy() {
@@ -225,7 +236,7 @@ function CallCard({ call, businessName }: { call: Call; businessName: string }) 
         </div>
 
         <div className="min-w-0">
-          <div className="font-medium truncate">{service || (call.spam ? "—" : "—")}</div>
+          <div className="font-medium truncate">{service || "—"}</div>
           <div className="text-sm text-neutral-500 truncate">
             {j?.address || property || "—"}
           </div>
@@ -241,15 +252,9 @@ function CallCard({ call, businessName }: { call: Call; businessName: string }) 
 
         <StatusBadge call={call} />
 
-        <div className="flex items-center gap-2 justify-end">
+        <div className="flex items-center justify-end">
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="rounded-lg bg-black text-white text-sm px-3 py-1.5 whitespace-nowrap"
-          >
-            {open ? "Close" : "Forward"}
-          </button>
-          <button
-            onClick={() => setOpen((o) => !o)}
+            onClick={onToggle}
             aria-label={open ? "Collapse" : "Expand"}
             className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100"
           >
@@ -297,10 +302,11 @@ function CallCard({ call, businessName }: { call: Call; businessName: string }) 
         <div className="flex items-center justify-between">
           <DeliveryPills job={j} />
           <button
-            onClick={() => setOpen((o) => !o)}
-            className="rounded-lg bg-black text-white text-sm px-3 py-1.5"
+            onClick={onToggle}
+            className="flex items-center gap-1 text-sm text-neutral-600 hover:text-neutral-900"
           >
-            {open ? "Close" : "Forward as text"}
+            {open ? "Hide" : "Details"}
+            <Chevron open={open} />
           </button>
         </div>
       </div>
@@ -477,6 +483,16 @@ export default function CallsView({
 }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+
+  function toggle(id: string) {
+    setOpenIds((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
 
   const kpis = useMemo(() => {
     const uniq = new Set(
@@ -515,14 +531,12 @@ export default function CallsView({
     const needle = q.trim().toLowerCase();
     return calls.filter((call) => {
       const j = call.jobs?.[0];
-      // filter
       if (filter === "qualified" && !(!call.spam && j && j.qualified !== false))
         return false;
       if (filter === "out_of_scope" && !(j && j.qualified === false)) return false;
       if (filter === "spam" && !call.spam) return false;
       if (filter === "not_texted" && !(j && !j.dispatched_sms && !call.spam))
         return false;
-      // search
       if (!needle) return true;
       const hay = [
         j?.customer_name,
@@ -541,6 +555,16 @@ export default function CallsView({
     });
   }, [calls, q, filter]);
 
+  const allOpen =
+    filtered.length > 0 && filtered.every((c) => openIds.has(c.id));
+
+  function expandAll() {
+    setOpenIds(new Set(filtered.map((c) => c.id)));
+  }
+  function collapseAll() {
+    setOpenIds(new Set());
+  }
+
   function exportCsv() {
     const blob = new Blob([toCsv(filtered)], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -558,6 +582,9 @@ export default function CallsView({
     { key: "not_texted", label: "Not texted", count: counts.not_texted },
     { key: "spam", label: "Spam", count: counts.spam },
   ];
+
+  const ghostBtn =
+    "rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100 whitespace-nowrap";
 
   return (
     <div className="space-y-5">
@@ -589,15 +616,12 @@ export default function CallsView({
             </button>
           )}
         </div>
-        <button
-          onClick={exportCsv}
-          className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-100"
-        >
+        <button onClick={exportCsv} className={ghostBtn}>
           Export CSV
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {chips.map((c) => (
           <button
             key={c.key}
@@ -615,6 +639,14 @@ export default function CallsView({
             </span>
           </button>
         ))}
+        {filtered.length > 0 && (
+          <button
+            onClick={allOpen ? collapseAll : expandAll}
+            className={`${ghostBtn} ml-auto`}
+          >
+            {allOpen ? "Collapse all" : "Expand all"}
+          </button>
+        )}
       </div>
 
       {/* List */}
@@ -627,7 +659,13 @@ export default function CallsView({
       ) : (
         <ul className="space-y-3">
           {filtered.map((call) => (
-            <CallCard key={call.id} call={call} businessName={businessName} />
+            <CallCard
+              key={call.id}
+              call={call}
+              businessName={businessName}
+              open={openIds.has(call.id)}
+              onToggle={() => toggle(call.id)}
+            />
           ))}
         </ul>
       )}
