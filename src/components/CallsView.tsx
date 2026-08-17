@@ -67,17 +67,34 @@ function fmtTime(iso: string) {
   });
 }
 
+// Full date + time + timezone abbreviation, e.g. "Aug 17, 2026, 3:45 PM CDT".
+// Rendered client-side, so it uses the viewer's local time zone.
+function fmtDateTimeTz(iso: string) {
+  return new Date(iso).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+}
+
+// "2 hr ago" style — hours since the call.
 function relTime(iso: string) {
-  const then = new Date(iso).getTime();
-  const diff = Date.now() - then;
-  const min = Math.floor(diff / 60000);
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (min < 1) return "just now";
-  if (min < 60) return `${min}m`;
+  if (min < 60) return `${min} min ago`;
   const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h`;
-  const d = Math.floor(hr / 24);
-  if (d < 7) return `${d}d`;
-  return fmtTime(iso);
+  if (hr < 48) return `${hr} hr ago`;
+  return `${Math.floor(hr / 24)} days ago`;
+}
+
+// Split "2123 N 75th Ave, Ellenwood, IL 60707" into street + "city, ST zip".
+function splitAddress(addr: string): { street: string; rest: string } {
+  const i = addr.indexOf(",");
+  if (i === -1) return { street: addr.trim(), rest: "" };
+  return { street: addr.slice(0, i).trim(), rest: addr.slice(i + 1).trim() };
 }
 
 function callbackOf(call: Call) {
@@ -229,6 +246,11 @@ function CallCard({
     : [];
   const addrVerified =
     (j?.details as Record<string, unknown> | null)?.address_verified === true;
+  const secondNumber =
+    j?.phone && isRealPhone(j.phone) && !samePhone(j.phone, call.from_number)
+      ? j.phone
+      : null;
+  const addr = j?.address ? splitAddress(j.address) : null;
 
   async function copy() {
     try {
@@ -245,41 +267,71 @@ function CallCard({
       {/* ============ DESKTOP: list row ============ */}
       <div
         onClick={onToggle}
-        className="hidden md:grid grid-cols-[auto_1.4fr_1.2fr_auto_auto_auto] items-center gap-4 px-4 py-3 cursor-pointer hover:bg-neutral-50"
+        className="hidden md:grid grid-cols-[auto_minmax(9rem,1fr)_2fr_auto_auto_auto] items-center gap-4 px-4 py-3 cursor-pointer hover:bg-neutral-50"
       >
         <Avatar name={name} spam={!!call.spam} />
 
+        {/* Caller — name + up to two numbers */}
         <div className="min-w-0">
           <div className="font-medium truncate">{name}</div>
           <div className="text-sm text-neutral-500 truncate">
             {call.from_number || "—"}
           </div>
+          {secondNumber && (
+            <div className="text-sm text-neutral-500 truncate">
+              {secondNumber}
+            </div>
+          )}
         </div>
 
+        {/* Job — service, then address on two lines */}
         <div className="min-w-0">
           <div className="font-medium truncate">{service || "—"}</div>
-          <div className="text-sm text-neutral-500 truncate">
-            {j?.address || property || "—"}
-            {addrVerified && j?.address && (
-              <span
-                className="text-emerald-600 ml-1"
-                title="Address is Google verified"
-              >
-                ✓
-              </span>
-            )}
-          </div>
+          {addr ? (
+            <>
+              <div className="text-sm text-neutral-500 truncate">
+                {addr.street}
+              </div>
+              {addr.rest && (
+                <div className="text-sm text-neutral-500 truncate">
+                  {addr.rest}
+                  {addrVerified && (
+                    <span
+                      className="text-emerald-600 ml-1"
+                      title="Address is Google verified"
+                    >
+                      ✓
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-sm text-neutral-500 truncate">
+              {property || "—"}
+            </div>
+          )}
         </div>
 
+        {/* Date / time */}
         <div
           className="text-right text-sm text-neutral-500 whitespace-nowrap"
-          title={fmtTime(call.created_at)}
+          title={fmtDateTimeTz(call.created_at)}
         >
-          <div>{relTime(call.created_at)}</div>
+          <div>{fmtTime(call.created_at)}</div>
           <div className="tabular-nums">{durCost}</div>
         </div>
 
-        <StatusBadge call={call} />
+        {/* Relative time + status */}
+        <div className="flex flex-col items-end gap-1">
+          <span
+            className="text-xs text-neutral-400 whitespace-nowrap"
+            suppressHydrationWarning
+          >
+            {relTime(call.created_at)}
+          </span>
+          <StatusBadge call={call} />
+        </div>
 
         <div className="flex items-center justify-end text-neutral-500">
           <span className="p-1.5">
@@ -297,9 +349,9 @@ function CallCard({
               <div className="font-medium truncate">{name}</div>
               <div
                 className="text-sm text-neutral-500 truncate"
-                title={fmtTime(call.created_at)}
+                title={fmtDateTimeTz(call.created_at)}
               >
-                {call.from_number || "—"} · {relTime(call.created_at)}
+                {call.from_number || "—"} · {fmtTime(call.created_at)}
               </div>
             </div>
           </div>
@@ -307,6 +359,9 @@ function CallCard({
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+          <div className="col-span-2">
+            <Field label="Date / time" value={fmtDateTimeTz(call.created_at)} />
+          </div>
           <Field label="Service" value={service} />
           <Field label="Property" value={property} />
           <div className="col-span-2">
@@ -340,6 +395,7 @@ function CallCard({
       {open && (
         <div className="border-t border-neutral-200 bg-neutral-50 p-4 space-y-4">
           <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            <Field label="Date / time" value={fmtDateTimeTz(call.created_at)} />
             <Field label="Caller ID" value={call.from_number} />
             {j?.phone && !samePhone(j.phone, call.from_number) && (
               <Field label="Callback #" value={j.phone} />
