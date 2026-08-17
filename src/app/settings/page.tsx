@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { getActiveBusiness, isAdmin } from "@/lib/tenant";
-import { getTwilioBalance } from "@/lib/twilio";
+import { getTwilioBalance, twilioConnected } from "@/lib/twilio";
 import SettingsNav from "@/components/SettingsNav";
 import TwilioCredentials from "@/components/TwilioCredentials";
 import SmsRecipients from "@/components/SmsRecipients";
@@ -26,7 +26,9 @@ export default async function SettingsPage({
 
   const { data: cred } = await supabase
     .from("credentials")
-    .select("twilio_account_sid, twilio_auth_token, twilio_number")
+    .select(
+      "twilio_account_sid, twilio_api_key_sid, twilio_api_key_secret, twilio_auth_token, twilio_number"
+    )
     .eq("business_id", businessId)
     .maybeSingle();
 
@@ -36,11 +38,14 @@ export default async function SettingsPage({
     .eq("business_id", businessId)
     .maybeSingle();
 
-  // Compute masked values server-side — the real SID/token never reach the client.
+  // Compute masked values server-side — real secrets never reach the client.
   const sid = (cred?.twilio_account_sid as string | null) || "";
+  const keySid = (cred?.twilio_api_key_sid as string | null) || "";
+  const keySecret = (cred?.twilio_api_key_secret as string | null) || "";
   const token = (cred?.twilio_auth_token as string | null) || "";
-  const connected = Boolean(sid && token);
-  const balance = connected ? await getTwilioBalance(sid, token) : null;
+  const creds = { accountSid: sid, keySid, keySecret, authToken: token };
+  const connected = twilioConnected(creds);
+  const balance = connected ? await getTwilioBalance(creds) : null;
 
   const smsNumbers = String(dispatch?.sms_to ?? "")
     .split(/[,\n;]+/)
@@ -73,7 +78,9 @@ export default async function SettingsPage({
       <TwilioCredentials
         connected={connected}
         sidLast4={sid ? sid.slice(-4) : null}
-        hasToken={Boolean(token)}
+        keyLast4={keySid ? keySid.slice(-4) : null}
+        hasKey={Boolean(keySid && keySecret)}
+        hasLegacyToken={Boolean(token)}
         fromNumber={(cred?.twilio_number as string | null) ?? ""}
         balance={balance}
       />

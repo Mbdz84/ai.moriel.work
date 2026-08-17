@@ -46,14 +46,15 @@ export async function saveSettings(formData: FormData) {
   redirect("/settings?saved=1");
 }
 
-// Twilio credentials. SID/token are only updated when provided (so the
-// masked values aren't wiped by a blank submit). From number always updates.
+// Twilio credentials (API Key). Secret fields are only updated when provided
+// (so a blank submit doesn't wipe them). From number always updates.
 export async function saveTwilio(formData: FormData) {
   const { supabase, businessId } = await requireAdminBusiness();
   const str = (k: string) => String(formData.get(k) ?? "").trim();
 
   const sid = str("twilio_account_sid");
-  const token = str("twilio_auth_token");
+  const keySid = str("twilio_api_key_sid");
+  const keySecret = str("twilio_api_key_secret");
   const from = str("twilio_number");
 
   const update: Record<string, unknown> = {
@@ -62,7 +63,8 @@ export async function saveTwilio(formData: FormData) {
     updated_at: new Date().toISOString(),
   };
   if (sid) update.twilio_account_sid = sid;
-  if (token) update.twilio_auth_token = token;
+  if (keySid) update.twilio_api_key_sid = keySid;
+  if (keySecret) update.twilio_api_key_secret = keySecret;
 
   await supabase.from("credentials").upsert(update);
   redirect("/settings?saved=twilio");

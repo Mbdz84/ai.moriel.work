@@ -19,13 +19,18 @@ export async function GET() {
 
   const { data: cred } = await supabase
     .from("credentials")
-    .select("twilio_account_sid, twilio_auth_token")
+    .select(
+      "twilio_account_sid, twilio_api_key_sid, twilio_api_key_secret, twilio_auth_token"
+    )
     .eq("business_id", businessId)
     .maybeSingle();
 
-  const sid = (cred?.twilio_account_sid as string | null) || "";
-  const token = (cred?.twilio_auth_token as string | null) || "";
-  const twilio = sid && token ? await getTwilioBalance(sid, token) : null;
+  const twilio = await getTwilioBalance({
+    accountSid: (cred?.twilio_account_sid as string | null) ?? "",
+    keySid: (cred?.twilio_api_key_sid as string | null) ?? "",
+    keySecret: (cred?.twilio_api_key_secret as string | null) ?? "",
+    authToken: (cred?.twilio_auth_token as string | null) ?? "",
+  });
 
   return NextResponse.json({ twilio });
 }

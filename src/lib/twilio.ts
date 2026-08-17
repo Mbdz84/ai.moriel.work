@@ -1,26 +1,51 @@
-// Send SMS via Twilio's REST API using fetch (no SDK dependency).
-// Credentials come from env for now; Phase 5 moves them to the
-// per-business `credentials` table.
+// Send SMS + read balance via Twilio's REST API using fetch (no SDK).
+//
+// Auth: prefers a Twilio API Key (Key SID "SK..." + Secret) over the account
+// Auth Token. API keys are the recommended, more secure option — they can be
+// revoked/rotated independently and (as Restricted keys) scoped to just
+// Messaging. The Account SID is always required (it's in the request URL).
+// A legacy Auth Token is still honored as a fallback so existing setups keep
+// working during the switch to keys.
 
 export type TwilioCreds = {
-  sid?: string | null;
-  token?: string | null;
+  accountSid?: string | null; // AC... — used in the URL (and as the user for token auth)
+  keySid?: string | null; // SK... — API key SID (preferred)
+  keySecret?: string | null; // API key secret (preferred)
+  authToken?: string | null; // legacy fallback
   from?: string | null;
 };
 
-// Per-tenant credentials (from the DB) take priority; env is the fallback.
-export async function sendSms(to: string, body: string, creds?: TwilioCreds) {
-  const sid = creds?.sid || process.env.TWILIO_ACCOUNT_SID;
-  const token = creds?.token || process.env.TWILIO_AUTH_TOKEN;
-  const from = creds?.from || process.env.TWILIO_FROM_NUMBER;
+type Resolved = { accountSid: string; user: string; pass: string };
 
-  if (!sid || !token || !from) {
-    throw new Error("Twilio credentials missing (SID / AUTH_TOKEN / FROM_NUMBER)");
+// Resolve which credentials to use. Per-tenant values win; env is the fallback.
+function resolveAuth(c: TwilioCreds): Resolved | null {
+  const accountSid = c.accountSid || process.env.TWILIO_ACCOUNT_SID || "";
+  const keySid = c.keySid || process.env.TWILIO_API_KEY_SID || "";
+  const keySecret = c.keySecret || process.env.TWILIO_API_KEY_SECRET || "";
+  const authToken = c.authToken || process.env.TWILIO_AUTH_TOKEN || "";
+  if (!accountSid) return null;
+  if (keySid && keySecret) return { accountSid, user: keySid, pass: keySecret };
+  if (authToken) return { accountSid, user: accountSid, pass: authToken };
+  return null;
+}
+
+// True when we have enough to authenticate (API key or auth token + account SID).
+export function twilioConnected(c: TwilioCreds): boolean {
+  return resolveAuth(c) !== null;
+}
+
+export async function sendSms(to: string, body: string, creds?: TwilioCreds) {
+  const a = resolveAuth(creds ?? {});
+  const from = creds?.from || process.env.TWILIO_FROM_NUMBER;
+  if (!a || !from) {
+    throw new Error(
+      "Twilio credentials missing (need Account SID + API key, and a From number)"
+    );
   }
 
-  const auth = Buffer.from(`${sid}:${token}`).toString("base64");
+  const auth = Buffer.from(`${a.user}:${a.pass}`).toString("base64");
   const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+    `https://api.twilio.com/2010-04-01/Accounts/${a.accountSid}/Messages.json`,
     {
       method: "POST",
       headers: {
@@ -40,16 +65,14 @@ export async function sendSms(to: string, body: string, creds?: TwilioCreds) {
 
 // Current Twilio account balance, e.g. "12.34 USD". null if unavailable.
 export async function getTwilioBalance(
-  sid?: string | null,
-  token?: string | null
+  creds?: TwilioCreds
 ): Promise<string | null> {
-  const s = sid || process.env.TWILIO_ACCOUNT_SID;
-  const t = token || process.env.TWILIO_AUTH_TOKEN;
-  if (!s || !t) return null;
+  const a = resolveAuth(creds ?? {});
+  if (!a) return null;
   try {
-    const auth = Buffer.from(`${s}:${t}`).toString("base64");
+    const auth = Buffer.from(`${a.user}:${a.pass}`).toString("base64");
     const res = await fetch(
-      `https://api.twilio.com/2010-04-01/Accounts/${s}/Balance.json`,
+      `https://api.twilio.com/2010-04-01/Accounts/${a.accountSid}/Balance.json`,
       { headers: { Authorization: `Basic ${auth}` }, cache: "no-store" }
     );
     if (!res.ok) return null;
@@ -61,4 +84,3 @@ export async function getTwilioBalance(
     return null;
   }
 }
-

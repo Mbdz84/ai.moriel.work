@@ -3,18 +3,22 @@
 import { useState } from "react";
 import { saveTwilio } from "@/app/settings/actions";
 
-// Shows Twilio credentials masked (never sends the real token/SID to the
-// browser). "Change credentials" reveals editable inputs.
+// Twilio credentials via an API Key (Key SID + Secret) — the secure option.
+// Secrets are never sent to the browser; only masked hints are shown.
 export default function TwilioCredentials({
   connected,
   sidLast4,
-  hasToken,
+  keyLast4,
+  hasKey,
+  hasLegacyToken,
   fromNumber,
   balance,
 }: {
   connected: boolean;
   sidLast4: string | null;
-  hasToken: boolean;
+  keyLast4: string | null;
+  hasKey: boolean;
+  hasLegacyToken: boolean;
   fromNumber: string;
   balance: string | null;
 }) {
@@ -41,8 +45,13 @@ export default function TwilioCredentials({
       </div>
 
       {connected && (
-        <p className="text-sm text-neutral-600">
-          Balance: {balance ?? "—"}
+        <p className="text-sm text-neutral-600">Balance: {balance ?? "—"}</p>
+      )}
+
+      {hasLegacyToken && !hasKey && (
+        <p className="rounded bg-amber-50 text-amber-700 text-xs px-3 py-2">
+          Using a legacy Auth Token. Add an API Key below for better security —
+          it can be revoked on its own without touching your account.
         </p>
       )}
 
@@ -58,11 +67,13 @@ export default function TwilioCredentials({
             />
           </div>
           <div className="space-y-1">
-            <label className={label}>Auth Token</label>
+            <label className={label}>API Key</label>
             <input
               disabled
               className={disabled}
-              value={hasToken ? "•••• saved" : "not set"}
+              value={
+                hasKey ? `SK••••••••${keyLast4 ?? ""} · secret saved` : "not set"
+              }
               readOnly
             />
           </div>
@@ -90,12 +101,21 @@ export default function TwilioCredentials({
             />
           </div>
           <div className="space-y-1">
-            <label className={label}>Auth Token</label>
+            <label className={label}>API Key SID</label>
             <input
-              name="twilio_auth_token"
+              name="twilio_api_key_sid"
+              className={input}
+              placeholder="SKxxxxxxxx"
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className={label}>API Key Secret</label>
+            <input
+              name="twilio_api_key_secret"
               type="password"
               className={input}
-              placeholder="new auth token"
+              placeholder="API key secret"
               autoComplete="new-password"
             />
           </div>
@@ -124,8 +144,9 @@ export default function TwilioCredentials({
             </button>
           </div>
           <p className="text-xs text-neutral-500">
-            Leave SID/token blank to keep the existing ones and only update the
-            number.
+            Create a key in Twilio Console → Account → API keys &amp; tokens →
+            Create API key. Paste the Key SID (SK…) and Secret here. Blank fields
+            keep the existing values.
           </p>
         </form>
       )}

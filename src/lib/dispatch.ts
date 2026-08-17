@@ -39,6 +39,8 @@ type DispatchTarget = {
 
 type Credentials = {
   twilio_account_sid: string | null;
+  twilio_api_key_sid: string | null;
+  twilio_api_key_secret: string | null;
   twilio_auth_token: string | null;
   twilio_number: string | null;
 };
@@ -169,8 +171,10 @@ export async function dispatchJob(
   const agentName = agent?.display_name ?? "";
 
   const creds = {
-    sid: cred?.twilio_account_sid,
-    token: cred?.twilio_auth_token,
+    accountSid: cred?.twilio_account_sid,
+    keySid: cred?.twilio_api_key_sid,
+    keySecret: cred?.twilio_api_key_secret,
+    authToken: cred?.twilio_auth_token,
     from: cred?.twilio_number,
   };
 
@@ -293,8 +297,10 @@ export async function notifySpamCall(
   const numbers = splitList(target.sms_to || process.env.DISPATCH_SMS_TO);
   if (numbers.length > 0) {
     const creds = {
-      sid: cred?.twilio_account_sid,
-      token: cred?.twilio_auth_token,
+      accountSid: cred?.twilio_account_sid,
+      keySid: cred?.twilio_api_key_sid,
+      keySecret: cred?.twilio_api_key_secret,
+      authToken: cred?.twilio_auth_token,
       from: cred?.twilio_number,
     };
     for (const n of numbers) {
