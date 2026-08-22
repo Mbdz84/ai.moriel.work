@@ -188,3 +188,41 @@ export async function listVapiAssistants(): Promise<
     return [];
   }
 }
+
+export type AssistantPhone = {
+  number: string;
+  // Vapi provider: "twilio" | "vapi" | "vonage" | "byo-phone-number" | ...
+  provider: string;
+};
+
+// Map each Vapi phone number to the assistant it's assigned to. Used on the
+// Sources page to show which number rings each assistant, and whether it's a
+// Twilio number. A number linked to a squad (not a single assistant) is skipped.
+export async function getAssistantPhoneNumbers(): Promise<
+  Record<string, AssistantPhone>
+> {
+  const key = process.env.VAPI_API_KEY;
+  if (!key) return {};
+  try {
+    const r = await fetch(`https://api.vapi.ai/phone-number?limit=100`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (!r.ok) return {};
+    const list = await r.json();
+    const map: Record<string, AssistantPhone> = {};
+    for (const p of Array.isArray(list) ? list : []) {
+      const assistantId = (p?.assistantId ?? p?.assistant?.id) as
+        | string
+        | undefined;
+      const number = (p?.number ?? p?.sipUri) as string | undefined;
+      const provider = (p?.provider as string | undefined) ?? "";
+      if (assistantId && number && !map[assistantId]) {
+        map[assistantId] = { number, provider };
+      }
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}

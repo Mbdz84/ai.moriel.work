@@ -32,13 +32,9 @@ export async function saveSettings(formData: FormData) {
       sms_to: numbers.join(", "),
       json_enabled: formData.get("json_enabled") === "on",
       json_url: str("json_url"),
-      caller_sms_enabled: formData.get("caller_sms_enabled") === "on",
-      caller_link: str("caller_link"),
-      caller_link_label: str("caller_link_label"),
-      caller_sms_template: str("caller_sms_template"),
+      // Caller-SMS + spam-notify moved to per-source (see /settings/sources).
       email_enabled: formData.get("email_enabled") === "on",
       email_to: str("email_to"),
-      notify_spam: formData.get("notify_spam") === "on",
       updated_at: new Date().toISOString(),
     })
     .eq("business_id", businessId);

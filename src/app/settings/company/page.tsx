@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getActiveBusiness, isAdmin } from "@/lib/tenant";
+import { getActiveBusiness, isAdmin, isSuperAdmin } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
+import AccountForm from "@/components/AccountForm";
+import DangerZone from "@/components/DangerZone";
 import { updateCompany, addUser, removeUser } from "./actions";
 
 type Member = { user_id: string; role: string; email: string };
@@ -23,6 +25,8 @@ export default async function CompanyPage({
   if (!businessId) redirect("/dashboard");
   if (!isAdmin(active?.role)) redirect("/dashboard");
 
+  const superAdmin = await isSuperAdmin(supabase);
+
   const { data: members } = await supabase.rpc("get_company_members", {
     b: businessId,
   });
@@ -38,6 +42,15 @@ export default async function CompanyPage({
         <SettingsNav active="company" admin={true} />
       </div>
 
+      {active?.disabled && (
+        <p className="rounded bg-rose-100 text-rose-800 text-sm px-3 py-2">
+          This account is <strong>disabled</strong>.
+          {superAdmin
+            ? " Re-enable it in the Danger zone below."
+            : " Contact your administrator."}
+        </p>
+      )}
+
       {saved === "1" && (
         <p className="rounded bg-green-50 text-green-700 text-sm px-3 py-2">
           Company details saved.
@@ -51,6 +64,16 @@ export default async function CompanyPage({
       {saved === "removed" && (
         <p className="rounded bg-neutral-100 text-neutral-700 text-sm px-3 py-2">
           User removed.
+        </p>
+      )}
+      {saved === "disabled" && (
+        <p className="rounded bg-amber-50 text-amber-700 text-sm px-3 py-2">
+          Account disabled.
+        </p>
+      )}
+      {saved === "enabled" && (
+        <p className="rounded bg-green-50 text-green-700 text-sm px-3 py-2">
+          Account re-enabled.
         </p>
       )}
       {saved === "err" && (
@@ -147,6 +170,23 @@ export default async function CompanyPage({
           </p>
         </form>
       </section>
+
+      {/* Your login (moved here from the Account tab) */}
+      <section className="space-y-3">
+        <h2 className="font-semibold">Your login</h2>
+        <p className="text-sm text-neutral-500">{user.email}</p>
+        <div className="max-w-md">
+          <AccountForm />
+        </div>
+      </section>
+
+      {/* Danger zone — super admin only */}
+      {superAdmin && (
+        <DangerZone
+          companyName={active?.name ?? ""}
+          disabled={Boolean(active?.disabled)}
+        />
+      )}
     </main>
   );
 }

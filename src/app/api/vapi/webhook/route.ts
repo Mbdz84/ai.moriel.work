@@ -60,6 +60,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, warn: "no business" });
   }
 
+  // Disabled account: don't process or dispatch its calls.
+  const { data: bizRow } = await supabase
+    .from("businesses")
+    .select("disabled")
+    .eq("id", businessId)
+    .maybeSingle();
+  if (bizRow?.disabled) {
+    console.warn("Business disabled — skipping call", call?.id);
+    return NextResponse.json({ ok: true, disabled: true });
+  }
+
   // --- Extract the structured data the assistant collected. ---
   type JobData = {
     name?: string;
@@ -102,22 +113,56 @@ export async function POST(req: NextRequest) {
     ? Math.round(message.durationSeconds)
     : null;
 
-  // --- Source: which assistant/brand handled this call. Uses the configured
-  // label from the Sources settings, falling back to the assistant's name. ---
+  // --- Source: which assistant/brand handled this call. Pulls the per-source
+  // routing config (label, outbound number, agent name, extra destinations),
+  // falling back to the assistant's own name for the label. ---
   const assistantId: string | null =
     call?.assistantId ?? message?.assistantId ?? null;
+  type SourceCfg = {
+    label: string | null;
+    from_number: string | null;
+    agent_name: string | null;
+    extra_sms_to: string | null;
+    extra_json_url: string | null;
+    exclude_from_global: boolean | null;
+    notify_spam: boolean | null;
+    caller_sms_enabled: boolean | null;
+    caller_link: string | null;
+    caller_link_label: string | null;
+    caller_sms_template: string | null;
+  };
+  let sourceCfg: SourceCfg | null = null;
   let source: string | null = null;
   if (assistantId) {
     const { data: src } = await supabase
       .from("sources")
-      .select("label")
+      .select(
+        "label, from_number, agent_name, extra_sms_to, extra_json_url, exclude_from_global, notify_spam, caller_sms_enabled, caller_link, caller_link_label, caller_sms_template"
+      )
       .eq("business_id", businessId)
+      .eq("provider", "vapi")
       .eq("assistant_id", assistantId)
       .maybeSingle();
+    sourceCfg = (src as SourceCfg | null) ?? null;
     source =
-      (src?.label as string | null)?.trim() ||
+      (sourceCfg?.label as string | null)?.trim() ||
       (await getVapiAssistantName(assistantId));
   }
+
+  // Per-source routing object shared by job dispatch and the spam notice.
+  const sourceObj = {
+    label: source,
+    fromNumber: sourceCfg?.from_number ?? null,
+    agentName: sourceCfg?.agent_name ?? null,
+    extraSmsTo: sourceCfg?.extra_sms_to ?? null,
+    extraJsonUrl: sourceCfg?.extra_json_url ?? null,
+    excludeFromGlobal: Boolean(sourceCfg?.exclude_from_global),
+    notifySpam: Boolean(sourceCfg?.notify_spam),
+    callerSmsEnabled: Boolean(sourceCfg?.caller_sms_enabled),
+    callerLink: sourceCfg?.caller_link ?? null,
+    callerLinkLabel: sourceCfg?.caller_link_label ?? null,
+    callerSmsTemplate: sourceCfg?.caller_sms_template ?? null,
+  };
 
   // --- Normalize the spoken address via Google (optional, best-effort). ---
   const validated = await validateAddress(data?.address);
@@ -147,6 +192,7 @@ export async function POST(req: NextRequest) {
     .from("calls")
     .insert({
       business_id: businessId,
+      provider: "vapi",
       vapi_call_id: call?.id ?? null,
       from_number: callerNumber,
       to_number: toNumber,
@@ -187,11 +233,12 @@ export async function POST(req: NextRequest) {
 
   // 3) No usable job → treat as spam/no-intent. Optionally notify, then stop.
   if (!hasData) {
-    await notifySpamCall(supabase, businessId, {
-      fromNumber: callerNumber,
-      durationSec,
-      endedReason,
-    });
+    await notifySpamCall(
+      supabase,
+      businessId,
+      { fromNumber: callerNumber, durationSec, endedReason },
+      sourceObj
+    );
     return NextResponse.json({ ok: true, call_id: callRow.id, spam: true });
   }
 
@@ -219,6 +266,7 @@ export async function POST(req: NextRequest) {
   if (jobRow?.id) {
     await dispatchJob(supabase, businessId, jobRow.id, data, callerNumber, {
       smsAddress: validated?.twoLine,
+      source: sourceObj,
       call: {
         recordingUrl,
         transcript,

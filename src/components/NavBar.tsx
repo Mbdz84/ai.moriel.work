@@ -19,10 +19,12 @@ export default function NavBar({
   admin,
   active,
   memberships,
+  userName,
 }: {
   admin: boolean;
   active: Active;
   memberships: Membership[];
+  userName: string;
 }) {
   const [open, setOpen] = useState(false);
   const [balances, setBalances] = useState<{ twilio: string | null } | null>(
@@ -85,7 +87,7 @@ export default function NavBar({
 
   return (
     <header className="border-b border-neutral-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
-      <nav className="mx-auto max-w-[1100px] flex items-center justify-between px-6 h-14">
+      <nav className="mx-auto max-w-[1300px] flex items-center justify-between px-6 h-14">
         <div className="flex items-center gap-6">
           <Link href="/dashboard">{brand}</Link>
           <div className="hidden md:flex items-center gap-5">{navLinks()}</div>
@@ -104,6 +106,12 @@ export default function NavBar({
               activeId={active.business_id}
             />
           )}
+          <span
+            className="whitespace-nowrap font-medium text-neutral-700"
+            title={userName}
+          >
+            {userName}
+          </span>
           <ThemeToggle />
           <LogoutButton />
         </div>
@@ -170,6 +178,17 @@ export default function NavBar({
                   </div>
                 </div>
               )}
+              <div className="flex items-center gap-2 border-t border-neutral-200 pt-3">
+                <div className="grid h-8 w-8 place-items-center rounded-full bg-neutral-200 text-sm font-medium text-neutral-700">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <p
+                  className="break-words text-sm font-medium text-neutral-800"
+                  title={userName}
+                >
+                  {userName}
+                </p>
+              </div>
               <div className="flex items-center gap-3">
                 <ThemeToggle />
                 <LogoutButton />

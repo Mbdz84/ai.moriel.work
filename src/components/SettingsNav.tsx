@@ -1,7 +1,8 @@
 import Link from "next/link";
 
-// Sub-navigation for settings. Admin-only tabs render only for admins;
-// Account is always available.
+// Sub-navigation for settings. Admin-only tabs render only for admins.
+// For admins, personal login settings live inside the Company tab, so the
+// Account link is shown only to non-admin viewers (their one settings page).
 export default function SettingsNav({
   active,
   admin,
@@ -9,7 +10,6 @@ export default function SettingsNav({
   active:
     | "dispatch"
     | "sms"
-    | "agent"
     | "sources"
     | "company"
     | "usage"
@@ -23,16 +23,13 @@ export default function SettingsNav({
   const item = (key: string) => `${base} ${active === key ? on : off}`;
   return (
     <div className="flex flex-wrap gap-2">
-      {admin && (
+      {admin ? (
         <>
           <Link href="/settings" className={item("dispatch")}>
             Dispatch &amp; Twilio
           </Link>
           <Link href="/settings/sms" className={item("sms")}>
             SMS
-          </Link>
-          <Link href="/settings/agent" className={item("agent")}>
-            AI Agent
           </Link>
           <Link href="/settings/sources" className={item("sources")}>
             Sources
@@ -47,10 +44,11 @@ export default function SettingsNav({
             Guides
           </Link>
         </>
+      ) : (
+        <Link href="/settings/account" className={item("account")}>
+          Account
+        </Link>
       )}
-      <Link href="/settings/account" className={item("account")}>
-        Account
-      </Link>
     </div>
   );
 }

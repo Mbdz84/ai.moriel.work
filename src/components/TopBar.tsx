@@ -12,5 +12,19 @@ export default async function TopBar() {
   const { active, memberships } = await getActiveBusiness(supabase);
   const admin = isAdmin(active?.role);
 
-  return <NavBar admin={admin} active={active} memberships={memberships} />;
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const userName =
+    (typeof meta.full_name === "string" && meta.full_name) ||
+    (typeof meta.name === "string" && meta.name) ||
+    user.email ||
+    "Account";
+
+  return (
+    <NavBar
+      admin={admin}
+      active={active}
+      memberships={memberships}
+      userName={userName}
+    />
+  );
 }

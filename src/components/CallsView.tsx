@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 export type Job = {
   customer_name: string | null;
@@ -465,20 +465,16 @@ function CallCard({
               </button>
             </div>
 
-            {call.recording_url && (
-              <audio controls preload="none" className="w-full">
-                <source src={`/api/recording/${call.id}`} />
-              </audio>
-            )}
+            {call.recording_url && <Recording callId={call.id} />}
 
             {call.transcript && (
               <details className="text-sm">
                 <summary className="cursor-pointer text-neutral-500">
                   Transcript
                 </summary>
-                <p className="mt-2 whitespace-pre-wrap text-neutral-700">
-                  {call.transcript}
-                </p>
+                <div className="mt-2 space-y-1">
+                  {renderTranscript(call.transcript)}
+                </div>
               </details>
             )}
           </div>
@@ -486,6 +482,77 @@ function CallCard({
       )}
     </li>
   );
+}
+
+// Audio player for a call recording, with playback-speed buttons.
+const SPEEDS = [1, 1.25, 1.5, 2, 3];
+function Recording({ callId }: { callId: string }) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [rate, setRate] = useState(1);
+
+  const setSpeed = (r: number) => {
+    setRate(r);
+    if (audioRef.current) audioRef.current.playbackRate = r;
+  };
+
+  return (
+    <div className="space-y-2">
+      <audio
+        ref={audioRef}
+        controls
+        preload="none"
+        className="w-full"
+        onLoadedMetadata={() => {
+          if (audioRef.current) audioRef.current.playbackRate = rate;
+        }}
+      >
+        <source src={`/api/recording/${callId}`} />
+      </audio>
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs text-neutral-500">Speed</span>
+        {SPEEDS.map((r) => (
+          <button
+            key={r}
+            type="button"
+            onClick={() => setSpeed(r)}
+            className={`rounded px-2 py-0.5 text-xs transition-colors ${
+              rate === r
+                ? "bg-black text-white"
+                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            }`}
+          >
+            {r}x
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Render a Vapi transcript string with the AI's lines in blue and the
+// caller's lines in black. Lines are prefixed "AI:" / "User:" (case-insensitive,
+// also Bot/Assistant/Agent and Customer/Caller); continuation lines without a
+// prefix inherit the previous speaker's color.
+function renderTranscript(transcript: string) {
+  const AI = /^(ai|bot|assistant|agent)\s*:/i;
+  const USER = /^(user|customer|caller|human)\s*:/i;
+  let lastRole: "ai" | "user" = "ai";
+  return transcript.split(/\r?\n/).map((line, i) => {
+    const trimmed = line.trim();
+    if (!trimmed) return <div key={i} className="h-1" aria-hidden />;
+    if (AI.test(trimmed)) lastRole = "ai";
+    else if (USER.test(trimmed)) lastRole = "user";
+    return (
+      <p
+        key={i}
+        className={`whitespace-pre-wrap ${
+          lastRole === "ai" ? "text-blue-600" : "text-neutral-900"
+        }`}
+      >
+        {line}
+      </p>
+    );
+  });
 }
 
 function Kpi({

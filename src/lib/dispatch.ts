@@ -45,10 +45,36 @@ type Credentials = {
   twilio_number: string | null;
 };
 
+// Per-source routing config resolved from the call's assistant.
+export type SourceContext = {
+  // Display label / brand this source represents ({source} token).
+  label?: string | null;
+  // Outbound number this source texts from (overrides the account default).
+  fromNumber?: string | null;
+  // The {agent} name this source signs texts with.
+  agentName?: string | null;
+  // Extra job-SMS recipients, layered on top of the global list.
+  extraSmsTo?: string | null;
+  // Extra CRM / JSON webhook, in addition to the global one.
+  extraJsonUrl?: string | null;
+  // When true, skip the global Team dispatch destinations and use only
+  // this source's own extras.
+  excludeFromGlobal?: boolean | null;
+  // Notify the team about spam / no-intent calls for this source.
+  notifySpam?: boolean | null;
+  // Text the caller a link after the call (per source).
+  callerSmsEnabled?: boolean | null;
+  callerLink?: string | null;
+  callerLinkLabel?: string | null;
+  callerSmsTemplate?: string | null;
+};
+
 // Extra per-call context the dispatcher can't recompute on its own.
 type DispatchOptions = {
   // Two-line, validated address to show in the SMS (from Google validation).
   smsAddress?: string | null;
+  // Per-source routing config for this call.
+  source?: SourceContext | null;
   // Call metadata, used for the email summary.
   call?: {
     recordingUrl?: string | null;
@@ -93,7 +119,7 @@ function buildJobMessage(
 ): string {
   return renderSmsTemplate(template, {
     business: businessName,
-    source: opts?.call?.source || businessName,
+    source: opts?.call?.source || opts?.source?.label || businessName,
     agent: agentName,
     name: data.name ?? "",
     phone: resolveCallbackPhone(data.phone, callerNumber),
@@ -137,6 +163,8 @@ function buildEmailSummary(
 // Sends the SMS + optional JSON push + optional caller SMS + optional email
 // for a captured job. Reads dispatch_targets/credentials for the business;
 // falls back to env for the SMS destination so a single-business setup works.
+// Per-source config (opts.source) overrides the outbound number and agent
+// name, adds extra destinations, and can opt out of the global targets.
 export async function dispatchJob(
   supabase: SupabaseClient,
   businessId: string,
@@ -163,24 +191,21 @@ export async function dispatchJob(
     .eq("id", businessId)
     .maybeSingle()) as { data: { name: string | null } | null };
 
-  const { data: agent } = (await supabase
-    .from("agents")
-    .select("display_name")
-    .eq("business_id", businessId)
-    .maybeSingle()) as { data: { display_name: string | null } | null };
-
   const businessName = biz?.name ?? "";
-  const agentName = agent?.display_name ?? "";
+  // Agent/display name now comes from the per-source config.
+  const agentName = opts?.source?.agentName ?? "";
+  const excludeGlobal = Boolean(opts?.source?.excludeFromGlobal);
 
   const creds = {
     accountSid: cred?.twilio_account_sid,
     keySid: cred?.twilio_api_key_sid,
     keySecret: cred?.twilio_api_key_secret,
     authToken: cred?.twilio_auth_token,
-    from: cred?.twilio_number,
+    // This source's own number wins; fall back to the account default.
+    from: opts?.source?.fromNumber || cred?.twilio_number,
   };
 
-  // ---- Team SMS (one or more recipients) ----
+  // ---- Team SMS (global crew + this source's extras) ----
   const template =
     (target?.sms_template && target.sms_template.trim()) || DEFAULT_SMS_TEMPLATE;
   const body = buildJobMessage(
@@ -191,7 +216,11 @@ export async function dispatchJob(
     callerNumber,
     opts
   );
-  const numbers = splitList(target?.sms_to || process.env.DISPATCH_SMS_TO);
+  const globalNumbers = excludeGlobal
+    ? []
+    : splitList(target?.sms_to || process.env.DISPATCH_SMS_TO);
+  const extraNumbers = splitList(opts?.source?.extraSmsTo);
+  const numbers = Array.from(new Set([...globalNumbers, ...extraNumbers]));
   const smsEnabled = target ? target.sms_enabled !== false : true;
   if (smsEnabled && numbers.length > 0) {
     let anySent = false;
@@ -210,21 +239,18 @@ export async function dispatchJob(
     console.warn("SMS skipped: no destination number configured");
   }
 
-  // ---- Caller SMS (to the caller, with a helpful link) ----
-  if (
-    target?.caller_sms_enabled &&
-    callerNumber &&
-    (target.caller_link || "").trim()
-  ) {
+  // ---- Caller SMS (to the caller, with a helpful link) — per source ----
+  const callerLink = (opts?.source?.callerLink || "").trim();
+  if (opts?.source?.callerSmsEnabled && callerNumber && callerLink) {
     const callerTemplate =
-      (target.caller_sms_template && target.caller_sms_template.trim()) ||
+      (opts?.source?.callerSmsTemplate || "").trim() ||
       DEFAULT_CALLER_SMS_TEMPLATE;
     const callerBody = renderSmsTemplate(callerTemplate, {
-      business: businessName,
+      business: opts?.source?.label || businessName,
       agent: agentName,
       name: data.name ?? "",
-      link: target.caller_link ?? "",
-      link_label: target.caller_link_label || "Link",
+      link: callerLink,
+      link_label: opts?.source?.callerLinkLabel || "Link",
     });
     try {
       await sendSms(callerNumber, callerBody, creds);
@@ -233,9 +259,14 @@ export async function dispatchJob(
     }
   }
 
-  // ---- Email summary ----
+  // ---- Email summary (global; skipped when the source opts out) ----
   const emailTo = splitList(target?.email_to);
-  if (target?.email_enabled && emailConfigured() && emailTo.length > 0) {
+  if (
+    !excludeGlobal &&
+    target?.email_enabled &&
+    emailConfigured() &&
+    emailTo.length > 0
+  ) {
     const { subject, text } = buildEmailSummary(
       businessName,
       data,
@@ -249,36 +280,63 @@ export async function dispatchJob(
     }
   }
 
-  // ---- Custom JSON push ----
-  if (target?.json_enabled && target?.json_url) {
-    try {
-      await fetch(target.json_url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(target.json_headers ?? {}),
-        },
-        body: JSON.stringify({ businessId, jobId, ...data }),
-      });
+  // ---- JSON push: global endpoint (unless opted out) + source extra ----
+  const jsonTargets: { url: string; headers?: Record<string, string> }[] = [];
+  if (!excludeGlobal && target?.json_enabled && target?.json_url) {
+    jsonTargets.push({
+      url: target.json_url,
+      headers: target.json_headers ?? undefined,
+    });
+  }
+  const extraJson = (opts?.source?.extraJsonUrl || "").trim();
+  if (extraJson) jsonTargets.push({ url: extraJson });
+
+  if (jsonTargets.length > 0) {
+    let anyJson = false;
+    for (const t of jsonTargets) {
+      try {
+        await fetch(t.url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(t.headers ?? {}),
+          },
+          body: JSON.stringify({
+            businessId,
+            jobId,
+            source: opts?.source?.label ?? null,
+            ...data,
+          }),
+        });
+        anyJson = true;
+      } catch (e) {
+        console.error(`JSON dispatch to ${t.url} failed:`, e);
+      }
+    }
+    if (anyJson) {
       await supabase.from("jobs").update({ dispatched_json: true }).eq("id", jobId);
-    } catch (e) {
-      console.error("JSON dispatch failed:", e);
     }
   }
 }
 
 // Notify the team about a spam / no-intent call, only when notify_spam is on.
+// Source-aware: brands the message with the source, sends from the source's
+// number, and follows its recipient routing (global + extras, or extras only
+// when the source opts out of global).
 export async function notifySpamCall(
   supabase: SupabaseClient,
   businessId: string,
-  info: { fromNumber?: string | null; durationSec?: number | null; endedReason?: string | null }
+  info: { fromNumber?: string | null; durationSec?: number | null; endedReason?: string | null },
+  source?: SourceContext | null
 ) {
+  // Spam notification is now a per-source preference.
+  if (!source?.notifySpam) return;
+
   const { data: target } = (await supabase
     .from("dispatch_targets")
     .select("*")
     .eq("business_id", businessId)
     .maybeSingle()) as { data: DispatchTarget | null };
-  if (!target?.notify_spam) return;
 
   const { data: cred } = (await supabase
     .from("credentials")
@@ -292,18 +350,27 @@ export async function notifySpamCall(
     .eq("id", businessId)
     .maybeSingle()) as { data: { name: string | null } | null };
 
+  const excludeGlobal = Boolean(source?.excludeFromGlobal);
+  // Brand the notice with the source it came from, falling back to the account.
+  const brand =
+    (source?.label || "").trim() || biz?.name || "Front desk";
   const from = info.fromNumber || "unknown number";
   const dur = typeof info.durationSec === "number" ? ` (${info.durationSec}s)` : "";
-  const body = `${biz?.name ?? "Front desk"}: spam/unknown call from ${from}${dur}. No job captured.`;
+  const body = `${brand}: spam/unknown call from ${from}${dur}. No job captured.`;
 
-  const numbers = splitList(target.sms_to || process.env.DISPATCH_SMS_TO);
+  const globalNumbers = excludeGlobal
+    ? []
+    : splitList(target?.sms_to || process.env.DISPATCH_SMS_TO);
+  const extraNumbers = splitList(source?.extraSmsTo);
+  const numbers = Array.from(new Set([...globalNumbers, ...extraNumbers]));
   if (numbers.length > 0) {
     const creds = {
       accountSid: cred?.twilio_account_sid,
       keySid: cred?.twilio_api_key_sid,
       keySecret: cred?.twilio_api_key_secret,
       authToken: cred?.twilio_auth_token,
-      from: cred?.twilio_number,
+      // This source's own number wins; fall back to the account default.
+      from: source?.fromNumber || cred?.twilio_number,
     };
     for (const n of numbers) {
       try {
@@ -314,10 +381,10 @@ export async function notifySpamCall(
     }
   }
 
-  const emailTo = splitList(target.email_to);
-  if (target.email_enabled && emailConfigured() && emailTo.length > 0) {
+  const emailTo = splitList(target?.email_to);
+  if (!excludeGlobal && target?.email_enabled && emailConfigured() && emailTo.length > 0) {
     try {
-      await sendEmail({ to: emailTo, subject: "Spam / unknown call", text: body });
+      await sendEmail({ to: emailTo, subject: `Spam / unknown call — ${brand}`, text: body });
     } catch (e) {
       console.error("Spam email failed:", e);
     }

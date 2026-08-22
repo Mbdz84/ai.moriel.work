@@ -127,54 +127,14 @@ export default async function SettingsPage({
               className={input}
             />
           </div>
-        </div>
-
-        {/* Caller SMS */}
-        <div className={section}>
-          <h2 className="font-semibold">Text the caller a link</h2>
           <p className="text-xs text-neutral-500">
-            After the call, text the caller a link (booking page, quote form,
-            review link). Uses your Twilio number.
+            Texting the caller a link and spam-call notifications are configured
+            per source under{" "}
+            <a href="/settings/sources" className="underline">
+              Sources
+            </a>
+            .
           </p>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="caller_sms_enabled"
-              defaultChecked={dispatch?.caller_sms_enabled ?? false}
-            />
-            Text the caller after the call
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className={label}>Link label</label>
-              <input
-                name="caller_link_label"
-                defaultValue={dispatch?.caller_link_label ?? ""}
-                placeholder="e.g. Book your appointment"
-                className={input}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className={label}>Link URL</label>
-              <input
-                name="caller_link"
-                defaultValue={dispatch?.caller_link ?? ""}
-                placeholder="https://your-link.com"
-                className={input}
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className={label}>Message (optional)</label>
-            <textarea
-              name="caller_sms_template"
-              defaultValue={dispatch?.caller_sms_template ?? ""}
-              placeholder={
-                "Leave blank for the default. Tokens: {business} {agent} {name} {link} {link_label}"
-              }
-              className={`${input} min-h-20 font-mono`}
-            />
-          </div>
         </div>
 
         {/* Email summaries */}
@@ -201,23 +161,6 @@ export default async function SettingsPage({
               className={input}
             />
           </div>
-        </div>
-
-        {/* Spam */}
-        <div className={section}>
-          <h2 className="font-semibold">Spam calls</h2>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="notify_spam"
-              defaultChecked={dispatch?.notify_spam ?? false}
-            />
-            Notify me about spam / no-intent calls too
-          </label>
-          <p className="text-xs text-neutral-500">
-            Off by default — spam calls never send a job. Turn on to still get a
-            short heads-up when a call captured nothing usable.
-          </p>
         </div>
 
         <button

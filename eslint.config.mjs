@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Files staged for deletion (agent-page removal) — not part of the app.
+    "_to_delete/**",
   ]),
 ]);
 

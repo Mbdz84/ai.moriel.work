@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getActiveBusiness } from "@/lib/tenant";
+import { getActiveBusiness, isSuperAdmin } from "@/lib/tenant";
 import { computeRange } from "@/lib/date-range";
 import AutoRefresh from "@/components/AutoRefresh";
 import RangePicker from "@/components/RangePicker";
@@ -34,6 +34,22 @@ export default async function DashboardPage({
           </Link>
           .
         </p>
+      </main>
+    );
+  }
+
+  // Disabled account: lock out everyone except platform super admins.
+  if (active?.disabled && !(await isSuperAdmin(supabase))) {
+    return (
+      <main className="mx-auto w-full max-w-[1100px] p-8">
+        <div className="rounded-lg border border-rose-300 bg-rose-50 p-6 space-y-2">
+          <h1 className="text-xl font-bold text-rose-700">Account disabled</h1>
+          <p className="text-sm text-rose-700/90">
+            {business?.name ? `${business.name} ` : "This account "}
+            has been disabled. Please contact your administrator to restore
+            access.
+          </p>
+        </div>
       </main>
     );
   }
