@@ -82,19 +82,58 @@ export async function addUser(formData: FormData) {
 }
 
 export async function removeUser(formData: FormData) {
-  const { businessId, userId } = await requireAdmin();
+  const { supabase, businessId, userId } = await requireAdmin();
   const target = String(formData.get("user_id") ?? "");
+  if (!target) redirect("/settings/company");
 
-  // Don't let an admin remove themselves here.
-  if (target && target !== userId) {
-    const admin = createSupabaseAdmin();
-    await admin
-      .from("memberships")
-      .delete()
-      .eq("business_id", businessId)
-      .eq("user_id", target);
+  const isSuper = await isSuperAdmin(supabase);
+  // Regular admins can't remove themselves; super admins can remove anyone.
+  if (target === userId && !isSuper) {
+    redirect(
+      `/settings/company?saved=err&msg=${encodeURIComponent(
+        "You can't remove yourself from the team."
+      )}`
+    );
+  }
+
+  const admin = createSupabaseAdmin();
+  await admin
+    .from("memberships")
+    .delete()
+    .eq("business_id", businessId)
+    .eq("user_id", target);
+
+  // If a super admin removed their own membership, re-scope cleanly.
+  if (target === userId) {
+    const store = await cookies();
+    store.delete("active_business");
+    redirect("/dashboard");
   }
   redirect("/settings/company?saved=removed");
+}
+
+// Super-admin only: permanently delete a user's login (auth account). Cascades
+// to their memberships everywhere. Irreversible.
+export async function deleteLogin(formData: FormData) {
+  const { userId } = await requireSuper();
+  const target = String(formData.get("user_id") ?? "");
+  if (!target) redirect("/settings/company");
+
+  const admin = createSupabaseAdmin();
+  const { error } = await admin.auth.admin.deleteUser(target);
+  if (error) {
+    redirect(
+      `/settings/company?saved=err&msg=${encodeURIComponent(error.message)}`
+    );
+  }
+
+  // Deleting your own login ends your session — send to login.
+  if (target === userId) {
+    const store = await cookies();
+    store.delete("active_business");
+    redirect("/login");
+  }
+  redirect("/settings/company?saved=login_deleted");
 }
 
 // ---- Super-admin: disable / re-enable / delete the active company ----

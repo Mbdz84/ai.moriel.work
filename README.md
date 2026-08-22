@@ -1,4 +1,4 @@
-# Voice-AI
+# Voice-AI 
 
 Telephony CRM + AI receptionist for locksmith businesses.
 **Stack:** Next.js (App Router) · Supabase · Vapi (voice engine) · Twilio (phone + SMS) · Vercel.

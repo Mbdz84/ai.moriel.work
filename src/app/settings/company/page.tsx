@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { getActiveBusiness, isAdmin, isSuperAdmin } from "@/lib/tenant";
 import SettingsNav from "@/components/SettingsNav";
 import AccountForm from "@/components/AccountForm";
 import DangerZone from "@/components/DangerZone";
+import DeleteLoginButton from "@/components/DeleteLoginButton";
 import { updateCompany, addUser, removeUser } from "./actions";
 
 type Member = { user_id: string; role: string; email: string };
@@ -31,6 +33,21 @@ export default async function CompanyPage({
     b: businessId,
   });
   const team = (members ?? []) as Member[];
+
+  // Which team members are platform super admins (super_admins is service-role
+  // only). Shown to super-admin viewers.
+  let superIds = new Set<string>();
+  if (superAdmin && team.length) {
+    const admin = createSupabaseAdmin();
+    const { data: sa } = await admin
+      .from("super_admins")
+      .select("user_id")
+      .in(
+        "user_id",
+        team.map((m) => m.user_id)
+      );
+    superIds = new Set((sa ?? []).map((r) => r.user_id as string));
+  }
 
   const input = "w-full rounded border border-neutral-300 px-3 py-2 text-sm";
   const label = "text-sm font-medium text-neutral-700";
@@ -64,6 +81,11 @@ export default async function CompanyPage({
       {saved === "removed" && (
         <p className="rounded bg-neutral-100 text-neutral-700 text-sm px-3 py-2">
           User removed.
+        </p>
+      )}
+      {saved === "login_deleted" && (
+        <p className="rounded bg-rose-50 text-rose-700 text-sm px-3 py-2">
+          Login permanently deleted.
         </p>
       )}
       {saved === "disabled" && (
@@ -118,14 +140,22 @@ export default async function CompanyPage({
             >
               <span>{m.email}</span>
               <span className="flex items-center gap-3">
+                {superIds.has(m.user_id) && (
+                  <span className="rounded-full bg-rose-600 text-white text-xs font-medium px-2 py-0.5">
+                    super admin
+                  </span>
+                )}
                 <span className="text-neutral-500">{m.role}</span>
-                {m.user_id !== user.id && (
+                {(superAdmin || m.user_id !== user.id) && (
                   <form action={removeUser}>
                     <input type="hidden" name="user_id" value={m.user_id} />
-                    <button className="text-red-600 hover:underline">
+                    <button className="text-neutral-600 hover:underline">
                       Remove
                     </button>
                   </form>
+                )}
+                {superAdmin && (
+                  <DeleteLoginButton userId={m.user_id} email={m.email} />
                 )}
               </span>
             </li>
